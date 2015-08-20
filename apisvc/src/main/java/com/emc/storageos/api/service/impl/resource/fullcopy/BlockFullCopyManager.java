@@ -69,7 +69,7 @@ import com.emc.storageos.svcs.errorhandling.resources.InternalException;
 public class BlockFullCopyManager {
 
     // Enumeration specifying the valid keys for the full copy implementations map.
-    private enum FullCopyImpl {
+    public enum FullCopyImpl {
         dflt, vmax, vmax3, vnx, vnxe, hds, openstack, scaleio, xtremio, xiv, rp, vplex
     }
 
@@ -93,7 +93,7 @@ public class BlockFullCopyManager {
     }
 
     // A reference to a database client.
-    private DbClient _dbClient;
+    private final DbClient _dbClient;
 
     // A reference to a permissions helper.
     private PermissionsHelper _permissionsHelper = null;
@@ -108,20 +108,20 @@ public class BlockFullCopyManager {
     protected HttpServletRequest _request;
 
     // A reference to the security context
-    private SecurityContext _securityContext;
+    private final SecurityContext _securityContext;
 
     // A reference to the URI information.
-    private UriInfo _uriInfo;
+    private final UriInfo _uriInfo;
 
     // The supported block full copy API implementations
-    private Map<String, BlockFullCopyApi> _fullCopyImpls = new HashMap<String, BlockFullCopyApi>();
+    private final Map<String, BlockFullCopyApi> _fullCopyImpls = new HashMap<String, BlockFullCopyApi>();
 
     // A reference to a logger.
     private static final Logger s_logger = LoggerFactory.getLogger(BlockFullCopyManager.class);
 
     /**
      * Constructor
-     * 
+     *
      * @param dbClient A reference to a database client.
      * @param permissionsHelper A reference to a permission helper.
      * @param auditLogManager A reference to an audit log manager.
@@ -150,7 +150,7 @@ public class BlockFullCopyManager {
 
     /**
      * Create all platform specific full copy implementations.
-     * 
+     *
      * @param coordinator A reference to the coordinator.
      * @param tenantsService A reference to the tenants service or null.
      */
@@ -182,7 +182,8 @@ public class BlockFullCopyManager {
                 new VPlexBlockFullCopyApiImpl(_dbClient, coordinator, _placementManager.getStorageScheduler(SchedulerType.vplex.name()),
                         tenantsService));
         _fullCopyImpls.put(FullCopyImpl.rp.name(),
-                new RPBlockFullCopyApiImpl(_dbClient, coordinator, _placementManager.getStorageScheduler(SchedulerType.rp.name())));
+                new RPBlockFullCopyApiImpl(_dbClient, coordinator, _placementManager.getStorageScheduler(SchedulerType.rp.name()),
+                        _fullCopyImpls));
     }
 
     /**
@@ -190,12 +191,12 @@ public class BlockFullCopyManager {
      * passed URI. The URI must reference a volume or snapshot. For supported
      * platforms, if the source is a volume and it is in a consistency group,
      * full copies will be created for all volumes in the consistency group.
-     * 
+     *
      * @param sourceURI The URI of the source volume or snapshot.
      * @param param The request data specifying the parameters for the request.
-     * 
+     *
      * @return TaskList
-     * 
+     *
      * @throws InternalException
      */
     public TaskList createFullCopy(URI sourceURI, VolumeFullCopyCreateParam param)
@@ -248,7 +249,7 @@ public class BlockFullCopyManager {
 
     /**
      * Validates the full copy creation request.
-     * 
+     *
      * @param fcSourceObjList A list of full copy sources.
      * @param project A reference to the project.
      * @param name The desired name for the full copy volume.
@@ -333,12 +334,12 @@ public class BlockFullCopyManager {
      * volume and the volume is part of a consistency group, this method will
      * also activate the corresponding full copies for all other volumes in the
      * consistency group.
-     * 
+     *
      * @param sourceURI The URI of the source.
      * @param fullCopyURI The URI of the full copy volume.
-     * 
+     *
      * @return TaskList
-     * 
+     *
      * @throws InternalException
      */
     public TaskList activateFullCopy(URI sourceURI, URI fullCopyURI)
@@ -383,12 +384,12 @@ public class BlockFullCopyManager {
      * passed URI. For supported platforms, if the source is a volume and the
      * volume is part of a consistency group, this method will also detach the
      * corresponding full copies for all other volumes in the consistency group.
-     * 
+     *
      * @param sourceURI The URI of the source.
      * @param fullCopyURI The URI of the full copy volume.
-     * 
+     *
      * @return TaskList
-     * 
+     *
      * @throws InternalException
      */
     public TaskList detachFullCopy(URI sourceURI, URI fullCopyURI)
@@ -430,12 +431,12 @@ public class BlockFullCopyManager {
      * volume is part of a consistency group, this method will also restore all
      * other volumes in the consistency group with their corresponding full
      * copies.
-     * 
+     *
      * @param sourceURI The URI of the source.
      * @param fullCopyURI The URI of the full copy volume.
-     * 
+     *
      * @return TaskList
-     * 
+     *
      * @throws InternalException
      */
     public TaskList restoreFullCopy(URI sourceURI, URI fullCopyURI)
@@ -496,12 +497,12 @@ public class BlockFullCopyManager {
      * source is a volume and the volume is part of a consistency group, this
      * method will also resynchronize the corresponding full copies for all
      * other volumes in the consistency group.
-     * 
+     *
      * @param sourceURI The URI of the source.
      * @param fullCopyURI The URI of the full copy volume.
-     * 
+     *
      * @return TaskList
-     * 
+     *
      * @throws InternalException
      */
     public TaskList resynchronizeFullCopy(URI sourceURI, URI fullCopyURI)
@@ -559,14 +560,14 @@ public class BlockFullCopyManager {
     /**
      * Checks the progress of the data copy from the source with the
      * passed URI to the full copy with the passed URI.
-     * 
+     *
      * TBD Maybe vice versa for restore?
-     * 
+     *
      * @param sourceURI The URI of the source.
      * @param fullCopyURI The URI of the full copy volume.
-     * 
+     *
      * @return VolumeRestRep
-     * 
+     *
      * @throws InternalException
      */
     public VolumeRestRep checkFullCopyProgress(URI sourceURI, URI fullCopyURI)
@@ -597,9 +598,9 @@ public class BlockFullCopyManager {
 
     /**
      * Returns the full copies for the source volume with the passed URI.
-     * 
+     *
      * @param sourceVolumeURI The URI of the full copy source volume.
-     * 
+     *
      * @return NamedVolumesList
      */
     public NamedVolumesList getFullCopiesForSource(URI sourceVolumeURI) {
@@ -625,9 +626,9 @@ public class BlockFullCopyManager {
 
     /**
      * Returns the full copy with the passed URI.
-     * 
+     *
      * @param fullCopyURI The URI of the full copy volume.
-     * 
+     *
      * @return VolumeRestRep
      */
     public VolumeRestRep getFullCopy(URI fullCopyURI) {
@@ -639,7 +640,7 @@ public class BlockFullCopyManager {
     /**
      * For ViPR-Only delete, cleans up the full copy associations between
      * source and full copy volumes.
-     * 
+     *
      * @param volumeDescriptors The descriptors for volumes being
      *            deleted from ViPR.
      * @param dbClient A reference to a database client.
@@ -672,9 +673,9 @@ public class BlockFullCopyManager {
 
     /**
      * Verify that the passed volume can be deleted.
-     * 
+     *
      * @param volume A reference to a volume.
-     * 
+     *
      * @return true if the volume can be deleted, false otherwise.
      */
     public boolean volumeCanBeDeleted(Volume volume) {
@@ -698,9 +699,9 @@ public class BlockFullCopyManager {
 
     /**
      * Verify that the passed volume can be expanded.
-     * 
+     *
      * @param volume A reference to a volume.
-     * 
+     *
      * @return true if the volume can be expanded, false otherwise.
      */
     public boolean volumeCanBeExpanded(Volume volume) {
@@ -717,7 +718,7 @@ public class BlockFullCopyManager {
 
     /**
      * Verify that new volumes can be created in the passed consistency group.
-     * 
+     *
      * @param consistencyGroup A reference to the consistency group.
      * @param cgVolumes The volumes in the consistency group.
      */
@@ -731,7 +732,7 @@ public class BlockFullCopyManager {
 
     /**
      * Verify the passed consistency group can be updated.
-     * 
+     *
      * @param consistencyGroup A reference to the consistency group.
      * @param cgVolumes The volumes in the consistency group.
      */
@@ -746,10 +747,10 @@ public class BlockFullCopyManager {
     /**
      * Determines if the passed consistency group can have new volumes added or
      * existing volumes removed.
-     * 
+     *
      * @param consistencyGroup A reference to the consistency group.
      * @param cgVolumes The volumes in the consistency group.
-     * 
+     *
      * @return true if the group an be modified, false otherwise.
      */
     private boolean canConsistencyGroupBeModified(BlockConsistencyGroup consistencyGroup,
@@ -778,9 +779,9 @@ public class BlockFullCopyManager {
     /**
      * Given the passed full copy volume, return all volumes in the full copy
      * set.
-     * 
+     *
      * @param volume A Reference to a volume that is a full copy.
-     * 
+     *
      * @return The full copy volumes in the full copy set.
      */
     public Collection<Volume> getFullCopySet(Volume fullCopyVolume) {
@@ -797,7 +798,7 @@ public class BlockFullCopyManager {
     /**
      * Verifies that the volume's status with respect to full copies allows
      * snapshots to be created.
-     * 
+     *
      * @param requestedVolume A reference to the volume for which a snapshot was requested.
      * @param volumesToSnap The list of volumes that would be snapped.
      */
@@ -808,9 +809,9 @@ public class BlockFullCopyManager {
 
     /**
      * Determines and returns the platform specific full copy implementation.
-     * 
+     *
      * @param fcSourceObj A reference to the full copy source.
-     * 
+     *
      * @return The platform specific full copy implementation
      */
     private BlockFullCopyApi getPlatformSpecificFullCopyImpl(BlockObject fcSourceObj) {
@@ -856,7 +857,7 @@ public class BlockFullCopyManager {
 
     /**
      * Record audit log for services.
-     * 
+     *
      * @param opType audit event type (e.g. CREATE_VPOOL|TENANT etc.)
      * @param operationalStatus Status of operation (true|false)
      * @param operationStage Stage of operation. For sync operation, it should
@@ -888,9 +889,9 @@ public class BlockFullCopyManager {
     /**
      * Return the maximum number of active full copies for storage
      * systems of the passed type.
-     * 
+     *
      * @param systemType The system type.
-     * 
+     *
      * @return The maximum number of active full copies.
      */
     public static int getMaxFullCopiesForSystemType(String systemType) {
