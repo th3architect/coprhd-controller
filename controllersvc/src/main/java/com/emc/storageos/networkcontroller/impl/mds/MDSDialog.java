@@ -982,8 +982,12 @@ public class MDSDialog extends SSHDialog {
             createdKey = "MDSDialog.ivr.checkForEnhancedZoneSession.created";
         }
         
-        _log.info("DEBUG - Dumping lines \n {}", lines.toString());
-
+        
+        //TODO: remove after testing
+        if (retryCount == 4) {
+        	_log.info("DEBUG - retryCount {}", retryCount);
+        	pendingKey = "";
+        }
         for (String s : lines) {
         	_log.info("DEBUG : Dumping line : \n {}", s);
             if (s.startsWith(MDSDialogProperties.getString(createdKey))) { // Enhanced zone session has been created
