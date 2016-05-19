@@ -981,7 +981,7 @@ public class MDSDialog extends SSHDialog {
             busyKey = "MDSDialog.ivr.checkForEnhancedZoneSession.busy";
             createdKey = "MDSDialog.ivr.checkForEnhancedZoneSession.created";
         }
-            
+                  
         for (String s : lines) {
         	_log.info("DEBUG : Dumping line : \n {}", s);
             if (s.startsWith(MDSDialogProperties.getString(createdKey))) { // Enhanced zone session has been created
@@ -1580,10 +1580,7 @@ public class MDSDialog extends SSHDialog {
         for (int retryCount = 0; retryCount < sessionLockRetryMax && retryNeeded; retryCount++) {
             lastPrompt = sendWaitFor(payload, defaultTimeout, prompts, buf);
             String[] lines = getLines(buf);
-            
-            if (retryCount < 3) {
-            	lines = new String[] {"there is a pending action.", "check ivr status"};
-            }
+ 
             retryNeeded = checkForIvrZoneSession(lines, retryCount);
             _log.info("DEBUG - retryNeeded {}", retryNeeded);
 
