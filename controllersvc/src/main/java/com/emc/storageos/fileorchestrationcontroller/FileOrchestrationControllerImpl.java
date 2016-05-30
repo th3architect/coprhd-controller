@@ -4,6 +4,7 @@
  */
 package com.emc.storageos.fileorchestrationcontroller;
 
+import java.net.URI;
 import java.util.List;
 
 import com.emc.storageos.db.client.DbClient;
@@ -70,5 +71,11 @@ public class FileOrchestrationControllerImpl implements FileOrchestrationControl
     private void execOrchestration(String methodName, Object... args) throws ControllerException {
         _dispatcher.queue(NullColumnValueGetter.getNullURI(), FILE_ORCHESTRATION_DEVICE,
                 getController(), methodName, args);
+    }
+
+    @Override
+    public void failoverFileSystem(URI fsURI, String taskId) throws ControllerException {
+        execOrchestration("failoverFileSystem", fsURI, taskId);
+
     }
 }

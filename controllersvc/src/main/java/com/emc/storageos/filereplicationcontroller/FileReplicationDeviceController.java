@@ -81,6 +81,20 @@ public class FileReplicationDeviceController implements FileOrchestrationInterfa
 
     private static final String ROLLBACK_METHOD_NULL = "rollbackMethodNull";
 
+    private static final String FAILBACK_MIRROR_FILESHARE_WF_NAME = "FAILBACK_MIRROR_FILESHARE_WORKFLOW";
+
+    private static final String FAILOVER_MIRROR_FILESHARE_STEP = "failoverMirrorFilePairStep";
+    private static final String RESYNC_MIRROR_FILESHARE_STEP = "reSyncPrepMirrorFilePairStep";
+    private static final String START_MIRROR_FILESHARE_STEP = "reSyncPrepMirrorFilePairStep";
+
+    private static final String FAILOVER_MIRROR_FILESHARE_METH = "failoverMirrorFilePair";
+    private static final String RESYNC_MIRROR_FILESHARE_METH = "resyncPrepMirrorFilePair";
+    private static final String START_MIRROR_FILESHARE_METH = "startPrepMirrorFilePair";
+
+    private static final String FAILOVER_FILE_MIRRORS_STEP_DESC = "failover MirrorFileShare Link";
+    private static final String RESYNC_MIRROR_FILESHARE_STEP_DESC = "resync MirrorFileShare Link";
+    private static final String START_MIRROR_FILESHARE_STEP_DES = "start MirrorFileShare Link";
+
     /**
      * Calls to remote mirror operations on devices
      * 
@@ -122,7 +136,7 @@ public class FileReplicationDeviceController implements FileOrchestrationInterfa
     @Override
     public String addStepsForCreateFileSystems(Workflow workflow,
             String waitFor, List<FileDescriptor> filesystems, String taskId)
-            throws InternalException {
+                    throws InternalException {
 
         List<FileDescriptor> fileDescriptors = FileDescriptor.filterByType(filesystems,
                 new FileDescriptor.Type[] { FileDescriptor.Type.FILE_MIRROR_SOURCE,
@@ -146,7 +160,7 @@ public class FileReplicationDeviceController implements FileOrchestrationInterfa
     @Override
     public String addStepsForDeleteFileSystems(Workflow workflow,
             String waitFor, List<FileDescriptor> filesystems, String taskId)
-            throws InternalException {
+                    throws InternalException {
         List<FileDescriptor> sourceDescriptors = FileDescriptor.filterByType(
                 filesystems, FileDescriptor.Type.FILE_MIRROR_SOURCE);
         if (sourceDescriptors.isEmpty()) {
@@ -163,7 +177,7 @@ public class FileReplicationDeviceController implements FileOrchestrationInterfa
     @Override
     public String addStepsForExpandFileSystems(Workflow workflow,
             String waitFor, List<FileDescriptor> fileDescriptors, String taskId)
-            throws InternalException {
+                    throws InternalException {
         // TBD
         return null;
     }
@@ -530,20 +544,6 @@ public class FileReplicationDeviceController implements FileOrchestrationInterfa
         return dbClient.queryObject(StorageSystem.class, systemURI);
     }
 
-    private static final String FAILBACK_MIRROR_FILESHARE_WF_NAME = "FAILBACK_MIRROR_FILESHARE_WORKFLOW";
-
-    private static final String FAILOVER_MIRROR_FILESHARE_STEP = "failoverMirrorFilePairStep";
-    private static final String RESYNC_MIRROR_FILESHARE_STEP = "reSyncPrepMirrorFilePairStep";
-    private static final String START_MIRROR_FILESHARE_STEP = "reSyncPrepMirrorFilePairStep";
-
-    private static final String FAILOVER_MIRROR_FILESHARE_METH = "failoverMirrorFilePair";
-    private static final String RESYNC_MIRROR_FILESHARE_METH = "resyncPrepMirrorFilePair";
-    private static final String START_MIRROR_FILESHARE_METH = "startPrepMirrorFilePair";
-
-    private static final String FAILOVER_FILE_MIRRORS_STEP_DESC = "failover MirrorFileShare Link";
-    private static final String RESYNC_MIRROR_FILESHARE_STEP_DESC = "resync MirrorFileShare Link";
-    private static final String START_MIRROR_FILESHARE_STEP_DES = "start MirrorFileShare Link";
-
     public void doFailBackMirrorSessionWF(StorageSystem primarysystem, FileShare sourceFileShare,
             List<String> targetfileUris, String taskId) {
         log.info("start doFailBackMirrorSession operation");
@@ -872,4 +872,30 @@ public class FileReplicationDeviceController implements FileOrchestrationInterfa
             }
         }
     }
+
+    /**
+     * TO DO
+     */
+    public String addStepsForFailoverFileSystems(Workflow workflow,
+            String waitFor, URI fsURI, String taskId)
+                    throws InternalException {
+        FileShare sourceFileShare = dbClient.queryObject(FileShare.class, fsURI);
+        List<String> targetfileUris = new ArrayList<String>();
+
+        targetfileUris.addAll(sourceFileShare.getMirrorfsTargets());
+        FileShare targetFileShare = dbClient.queryObject(FileShare.class, URI.create(targetfileUris.get(0)));
+        StorageSystem systemTarget = dbClient.queryObject(StorageSystem.class, targetFileShare.getStorageDevice());
+        StorageSystem systemSource = dbClient.queryObject(StorageSystem.class, sourceFileShare.getStorageDevice());
+        String policyName = gerneratePolicyName(systemSource, targetFileShare);
+
+        String waitForFailover = null;
+        Workflow.Method failoverExecuteMethod = new Workflow.Method(FAILOVER_MIRROR_FILESHARE_METH, systemTarget, fsURI, policyName);
+
+        waitForFailover = workflow.createStep("Failover", "Failover File System :" + fsURI,
+                waitFor, systemTarget.getId(), systemTarget.getSystemType(), getClass(),
+                failoverExecuteMethod, rollbackMethodNullMethod(), null);
+        return waitForFailover;
+
+    }
+
 }

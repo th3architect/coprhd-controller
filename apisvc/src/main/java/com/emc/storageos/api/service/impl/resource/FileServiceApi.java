@@ -46,7 +46,7 @@ public interface FileServiceApi {
             VirtualArray varray, VirtualPool vpool, TenantOrg tenantOrg,
             DataObject.Flag[] flags, List<Recommendation> recommendations,
             TaskList taskList, String task, VirtualPoolCapabilityValuesWrapper vpoolCapabilities)
-            throws InternalException;
+                    throws InternalException;
 
     /**
      * Delete the passed filesystems for the passed system.
@@ -83,6 +83,16 @@ public interface FileServiceApi {
             throws InternalException;
 
     /**
+     * Failover the File System to target system
+     *
+     * @param fsURI
+     * @param taskId
+     * @throws InternalException
+     */
+    public void failoverFileShare(URI fsURI, String taskId)
+            throws InternalException;
+
+    /**
      * Create Continuous Copies for existing source file system
      * 
      * @param fs -source file system for which mirror file system to be created
@@ -100,6 +110,6 @@ public interface FileServiceApi {
     public TaskResourceRep createTargetsForExistingSource(FileShare fs, Project project,
             VirtualPool vpool, VirtualArray varray, TaskList taskList, String task, List<Recommendation> recommendations,
             VirtualPoolCapabilityValuesWrapper vpoolCapabilities)
-            throws InternalException;
+                    throws InternalException;
 
 }

@@ -4,6 +4,7 @@
  */
 package com.emc.storageos.fileorchestrationcontroller;
 
+import java.net.URI;
 import java.util.List;
 
 import com.emc.storageos.Controller;
@@ -42,6 +43,16 @@ public interface FileOrchestrationController extends Controller {
      * @throws ControllerException
      */
     public abstract void expandFileSystem(List<FileDescriptor> fileDescriptors, String taskId)
+            throws ControllerException;
+
+    /**
+     * Failover fileshare
+     * 
+     * @param fsURI
+     * @param taskId
+     * @throws ControllerException
+     */
+    public abstract void failoverFileSystem(URI fsURI, String taskId)
             throws ControllerException;
 
     /**

@@ -4,8 +4,12 @@
  */
 package com.emc.storageos.fileorchestrationcontroller;
 
+import static com.emc.storageos.db.client.util.CommonTransformerFunctions.FCTN_STRING_TO_URI;
+import static com.google.common.collect.Collections2.transform;
+
 import java.io.Serializable;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -13,6 +17,8 @@ import org.slf4j.LoggerFactory;
 
 import com.emc.storageos.Controller;
 import com.emc.storageos.db.client.DbClient;
+import com.emc.storageos.db.client.model.FileShare;
+import com.emc.storageos.db.client.model.Volume.PersonalityTypes;
 import com.emc.storageos.exceptions.DeviceControllerException;
 import com.emc.storageos.filereplicationcontroller.FileReplicationDeviceController;
 import com.emc.storageos.model.ResourceOperationTypeEnum;
@@ -24,6 +30,7 @@ import com.emc.storageos.volumecontroller.impl.file.CreateMirrorFileSystemsCompl
 import com.emc.storageos.volumecontroller.impl.file.FileCreateWorkflowCompleter;
 import com.emc.storageos.volumecontroller.impl.file.FileDeleteWorkflowCompleter;
 import com.emc.storageos.volumecontroller.impl.file.FileWorkflowCompleter;
+import com.emc.storageos.volumecontroller.impl.file.MirrorFileFailoverTaskCompleter;
 import com.emc.storageos.workflow.Workflow;
 import com.emc.storageos.workflow.WorkflowException;
 import com.emc.storageos.workflow.WorkflowService;
@@ -42,6 +49,7 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
     static final String EXPAND_FILESYSTEMS_WF_NAME = "EXPAND_FILESYSTEMS_WORKFLOW";
     static final String CHANGE_FILESYSTEMS_VPOOL_WF_NAME = "CHANGE_FILESYSTEMS_VPOOL_WORKFLOW";
     static final String CREATE_MIRROR_FILESYSTEMS_WF_NAME = "CREATE_MIRROR_FILESYSTEMS_WF_NAME";
+    static final String FAILOVER_FILESYSTEMS_WF_NAME = "failoverFileSystem";
 
     /*
      * (non-Javadoc)
@@ -297,5 +305,45 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
 
     public void setFileReplicationDeviceController(FileReplicationDeviceController fileReplicationDeviceController) {
         this._fileReplicationDeviceController = fileReplicationDeviceController;
+    }
+
+    @Override
+    public void failoverFileSystem(URI fsURI, String taskId) throws ControllerException {
+
+        Workflow workflow = null;
+
+        FileShare fileShare = s_dbClient.queryObject(FileShare.class, fsURI);
+        List<String> targetfileUris = new ArrayList<String>();
+        List<URI> combinedURI = new ArrayList<URI>();
+        if (PersonalityTypes.SOURCE.toString().equalsIgnoreCase(fileShare.getPersonality())) {
+            targetfileUris.addAll(fileShare.getMirrorfsTargets());
+
+            combinedURI.add(fileShare.getId());
+            combinedURI.addAll(transform(fileShare.getMirrorfsTargets(), FCTN_STRING_TO_URI));
+        }
+        MirrorFileFailoverTaskCompleter completer = new MirrorFileFailoverTaskCompleter(FileShare.class, combinedURI, taskId);
+        try {
+
+            // Generate the Workflow.
+            workflow = _workflowService.getNewWorkflow(this, FAILOVER_FILESYSTEMS_WF_NAME, false, taskId);
+            String waitFor = null;
+
+            s_logger.info("Generating steps for failover FileSystem");
+
+            // First, call the FileReplicationDeviceController to add its methods.
+            waitFor = _fileReplicationDeviceController.addStepsForFailoverFileSystems(workflow, waitFor, fsURI, taskId);
+
+            String successMessage = "Failover filesystems successful for: " + fsURI.toString();
+            Object[] callbackArgs = new Object[] { fsURI };
+            workflow.executePlan(completer, successMessage, new WorkflowCallback(), callbackArgs, null, null);
+
+        } catch (Exception ex) {
+            s_logger.error("Could not failover filesystems: " + fsURI, ex);
+            releaseWorkflowLocks(workflow);
+            String opName = ResourceOperationTypeEnum.FILE_PROTECTION_ACTION_FAILOVER.getName();
+            ServiceError serviceError = DeviceControllerException.errors.createFileSharesFailed(
+                    fsURI.toString(), opName, ex);
+            completer.error(s_dbClient, _locker, serviceError);
+        }
     }
 }

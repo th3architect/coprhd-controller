@@ -241,15 +241,22 @@ public class FileService extends TaskResourceService {
     // Protection operations that are allowed with /file/filesystems/{id}/protection/continuous-copies/
     public static enum ProtectionOp {
         FAILOVER("failover", ResourceOperationTypeEnum.FILE_PROTECTION_ACTION_FAILOVER), FAILBACK("failback",
-                ResourceOperationTypeEnum.FILE_PROTECTION_ACTION_FAILBACK), START("start",
-                        ResourceOperationTypeEnum.FILE_PROTECTION_ACTION_START), STOP("stop",
-                                ResourceOperationTypeEnum.FILE_PROTECTION_ACTION_STOP), PAUSE("pause",
-                                        ResourceOperationTypeEnum.FILE_PROTECTION_ACTION_PAUSE), RESUME("resume",
-                                                ResourceOperationTypeEnum.FILE_PROTECTION_ACTION_RESUME), REFRESH("refresh",
-                                                        ResourceOperationTypeEnum.FILE_PROTECTION_ACTION_REFRESH), UNKNOWN("unknown",
-                                                                ResourceOperationTypeEnum.PERFORM_PROTECTION_ACTION), UPDATE_RPO(
-                                                                        "update-rpo",
-                                                                        ResourceOperationTypeEnum.UPDATE_FILE_SYSTEM_REPLICATION_RPO);
+                ResourceOperationTypeEnum.FILE_PROTECTION_ACTION_FAILBACK),
+        START("start",
+                ResourceOperationTypeEnum.FILE_PROTECTION_ACTION_START),
+        STOP("stop",
+                ResourceOperationTypeEnum.FILE_PROTECTION_ACTION_STOP),
+        PAUSE("pause",
+                ResourceOperationTypeEnum.FILE_PROTECTION_ACTION_PAUSE),
+        RESUME("resume",
+                ResourceOperationTypeEnum.FILE_PROTECTION_ACTION_RESUME),
+        REFRESH("refresh",
+                ResourceOperationTypeEnum.FILE_PROTECTION_ACTION_REFRESH),
+        UNKNOWN("unknown",
+                ResourceOperationTypeEnum.PERFORM_PROTECTION_ACTION),
+        UPDATE_RPO(
+                "update-rpo",
+                ResourceOperationTypeEnum.UPDATE_FILE_SYSTEM_REPLICATION_RPO);
 
         private final String op;
         private final ResourceOperationTypeEnum resourceType;
@@ -3062,14 +3069,51 @@ public class FileService extends TaskResourceService {
     @Produces({ MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON })
     @Path("/{id}/protection/continuous-copies/failover")
     @CheckPermission(roles = { Role.TENANT_ADMIN }, acls = { ACL.OWN, ACL.ALL })
-    public TaskList failoverProtection(@PathParam("id") URI id, FileReplicationParam param) throws ControllerException {
+    public TaskResourceRep failoverProtection(@PathParam("id") URI id, FileReplicationParam param) throws ControllerException {
+
+        String task = UUID.randomUUID().toString();
         ArgValidator.checkFieldUriType(id, FileShare.class, "id");
-        FileCopy copy = param.getCopies().get(0);
-        if (copy.getType().equalsIgnoreCase(FileTechnologyType.REMOTE_MIRROR.name())) {
-            return performFileProtectionAction(param, id, ProtectionOp.FAILOVER.getRestOp());
-        } else {
-            throw APIException.badRequests.invalidCopyType(copy.getType());
+        FileShare fs = _dbClient.queryObject(FileShare.class, id);
+        ArgValidator.checkEntity(fs, id, true);
+
+        checkForPendingTasks(Arrays.asList(fs.getTenant().getURI()), Arrays.asList(fs));
+
+        URI projectURI = fs.getProject().getURI();
+        Project project = _permissionsHelper.getObjectById(projectURI, Project.class);
+        ArgValidator.checkEntity(project, projectURI, false);
+        _log.info("Found filesystem project {}", projectURI);
+
+        VirtualPool currentVpool = _dbClient.queryObject(VirtualPool.class, fs.getVirtualPool());
+        StringBuffer notSuppReasonBuff = new StringBuffer();
+
+        String operation = ProtectionOp.FAILOVER.getRestOp();
+        if (!FileSystemRepliationUtils.validateMirrorOperationSupported(fs, currentVpool, notSuppReasonBuff, operation)) {
+            _log.error("Mirror Operation {} is not supported for the file system {} as : {}", operation.toUpperCase(),
+                    fs.getLabel(), notSuppReasonBuff.toString());
+            throw APIException.badRequests.unableToPerformMirrorOperation(operation.toUpperCase(), fs.getId(),
+                    notSuppReasonBuff.toString());
         }
+        Operation op = _dbClient.createTaskOpStatus(FileShare.class, id,
+                task, ResourceOperationTypeEnum.FILE_PROTECTION_ACTION_FAILOVER);
+        op.setDescription("Filesystem Failover");
+
+        FileServiceApi fileServiceApi = getFileShareServiceImpl(fs, _dbClient);
+        try {
+            fileServiceApi.failoverFileShare(id, task);
+        } catch (InternalException e) {
+            if (_log.isErrorEnabled()) {
+                _log.error("", e);
+            }
+
+            FileShare fileShare = _dbClient.queryObject(FileShare.class, fs.getId());
+            op = fs.getOpStatus().get(task);
+            op.error(e);
+            fileShare.getOpStatus().updateTaskStatus(task, op);
+            _dbClient.updateObject(fs);
+            throw e;
+        }
+
+        return toTask(fs, task, op);
 
     }
 
