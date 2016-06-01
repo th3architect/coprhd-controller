@@ -755,6 +755,7 @@ public class FileReplicationDeviceController implements FileOrchestrationInterfa
             }
             completer = new MirrorFileFailbackTaskCompleter(FileShare.class, combined, opId);
             WorkflowStepCompleter.stepExecuting(opId);
+            log.info("Execution of Failover Job Started");
             getRemoteMirrorDevice(system).doFailoverLink(system, fileShare, completer, policyName);
         } catch (Exception e) {
             ServiceError error = DeviceControllerException.errors.jobFailed(e);
@@ -889,7 +890,8 @@ public class FileReplicationDeviceController implements FileOrchestrationInterfa
         String policyName = gerneratePolicyName(systemSource, targetFileShare);
 
         String waitForFailover = null;
-        Workflow.Method failoverExecuteMethod = new Workflow.Method(FAILOVER_MIRROR_FILESHARE_METH, systemTarget, fsURI, policyName);
+        Workflow.Method failoverExecuteMethod = new Workflow.Method(FAILOVER_MIRROR_FILESHARE_METH, systemTarget.getId(), fsURI,
+                policyName);
 
         waitForFailover = workflow.createStep("Failover", "Failover File System :" + fsURI,
                 waitFor, systemTarget.getId(), systemTarget.getSystemType(), getClass(),

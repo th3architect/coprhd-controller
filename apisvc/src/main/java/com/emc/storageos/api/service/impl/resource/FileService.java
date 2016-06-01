@@ -3069,8 +3069,9 @@ public class FileService extends TaskResourceService {
     @Produces({ MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON })
     @Path("/{id}/protection/continuous-copies/failover")
     @CheckPermission(roles = { Role.TENANT_ADMIN }, acls = { ACL.OWN, ACL.ALL })
-    public TaskResourceRep failoverProtection(@PathParam("id") URI id, FileReplicationParam param) throws ControllerException {
-
+    public TaskList failoverProtection(@PathParam("id") URI id, FileReplicationParam param) throws ControllerException {
+        TaskResourceRep taskResp = null;
+        TaskList taskList = new TaskList();
         String task = UUID.randomUUID().toString();
         ArgValidator.checkFieldUriType(id, FileShare.class, "id");
         FileShare fs = _dbClient.queryObject(FileShare.class, id);
@@ -3104,7 +3105,6 @@ public class FileService extends TaskResourceService {
             if (_log.isErrorEnabled()) {
                 _log.error("", e);
             }
-
             FileShare fileShare = _dbClient.queryObject(FileShare.class, fs.getId());
             op = fs.getOpStatus().get(task);
             op.error(e);
@@ -3112,9 +3112,10 @@ public class FileService extends TaskResourceService {
             _dbClient.updateObject(fs);
             throw e;
         }
+        taskResp = toTask(fs, task, op);
+        taskList.getTaskList().add(taskResp);
 
-        return toTask(fs, task, op);
-
+        return taskList;
     }
 
     /**
