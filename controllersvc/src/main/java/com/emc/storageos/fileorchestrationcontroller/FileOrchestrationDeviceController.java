@@ -331,7 +331,7 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
             s_logger.info("Generating steps for failover FileSystem");
 
             // First, call the FileReplicationDeviceController to add its methods.
-            waitFor = _fileReplicationDeviceController.addStepsForFailoverFileSystems(workflow, waitFor, fsURI, taskId);
+            waitFor = _fileReplicationDeviceController.addStepsForFailoverFileSystems(workflow, waitFor, fsURI, completer, taskId);
 
             String successMessage = "Failover filesystems successful for: " + fsURI.toString();
             Object[] callbackArgs = new Object[] { fsURI };

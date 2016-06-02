@@ -95,6 +95,8 @@ public class FileReplicationDeviceController implements FileOrchestrationInterfa
     private static final String RESYNC_MIRROR_FILESHARE_STEP_DESC = "resync MirrorFileShare Link";
     private static final String START_MIRROR_FILESHARE_STEP_DES = "start MirrorFileShare Link";
 
+    private static final String FAILOVER_FILE_SHARE_METH = "failoverFileSytem";
+
     /**
      * Calls to remote mirror operations on devices
      * 
@@ -769,6 +771,33 @@ public class FileReplicationDeviceController implements FileOrchestrationInterfa
     }
 
     /**
+     * Failover work flow step exec
+     * 
+     * @param storage
+     * @param fileshareURI
+     * @param policyName
+     * @param opId
+     */
+    public boolean failoverFileSytem(URI storage, URI fileshareURI, TaskCompleter completer, String policyName, String opId) {
+
+        try {
+            StorageSystem system = dbClient.queryObject(StorageSystem.class, storage);
+            FileShare fileShare = dbClient.queryObject(FileShare.class, fileshareURI);
+            WorkflowStepCompleter.stepExecuting(opId);
+            log.info("Execution of Failover Job Started");
+            getRemoteMirrorDevice(system).doFailoverLink(system, fileShare, completer, policyName);
+        } catch (Exception e) {
+            ServiceError error = DeviceControllerException.errors.jobFailed(e);
+            if (null != completer) {
+                completer.error(dbClient, error);
+            }
+            WorkflowStepCompleter.stepFailed(opId, error);
+            return false;
+        }
+        return true;
+    }
+
+    /**
      * Creates a rollback workflow method that does nothing, but allows rollback
      * to continue to prior steps back up the workflow chain.
      * 
@@ -878,7 +907,7 @@ public class FileReplicationDeviceController implements FileOrchestrationInterfa
      * TO DO
      */
     public String addStepsForFailoverFileSystems(Workflow workflow,
-            String waitFor, URI fsURI, String taskId)
+            String waitFor, URI fsURI, TaskCompleter completer, String taskId)
                     throws InternalException {
         FileShare sourceFileShare = dbClient.queryObject(FileShare.class, fsURI);
         List<String> targetfileUris = new ArrayList<String>();
@@ -890,12 +919,12 @@ public class FileReplicationDeviceController implements FileOrchestrationInterfa
         String policyName = gerneratePolicyName(systemSource, targetFileShare);
 
         String waitForFailover = null;
-        Workflow.Method failoverExecuteMethod = new Workflow.Method(FAILOVER_MIRROR_FILESHARE_METH, systemTarget.getId(), fsURI,
+        Workflow.Method failoverExecuteMethod = new Workflow.Method(FAILOVER_FILE_SHARE_METH, systemTarget.getId(), fsURI, completer,
                 policyName);
 
-        waitForFailover = workflow.createStep("Failover", "Failover File System :" + fsURI,
+        waitForFailover = workflow.createStep("Failover", "Failover To Target File System :" + fsURI,
                 waitFor, systemTarget.getId(), systemTarget.getSystemType(), getClass(),
-                failoverExecuteMethod, rollbackMethodNullMethod(), null);
+                failoverExecuteMethod, rollbackMethodNullMethod(), taskId);
         return waitForFailover;
 
     }
