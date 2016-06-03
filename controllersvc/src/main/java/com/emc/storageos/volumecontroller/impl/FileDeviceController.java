@@ -384,7 +384,8 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
 
                         if (fsCheck) {
                             String errMsg = new String(
-                                    "delete file system from DB failed due to either snapshots or quota directories exist for file system " + fsObj.getLabel());
+                                    "delete file system from DB failed due to either snapshots or quota directories exist for file system "
+                                            + fsObj.getLabel());
                             _log.error(errMsg);
 
                             final ServiceCoded serviceCoded = DeviceControllerException.errors.jobFailedOpMsg(
@@ -915,6 +916,7 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
                 args.setFileOperation(true);
                 setVirtualNASinArgs(fsObj.getVirtualNAS(), args);
 
+                WorkflowStepCompleter.stepExecuting(opId);
                 BiosCommandResult result = getDevice(storageObj.getSystemType()).doShare(storageObj, args, smbFileShare);
 
                 if (result.getCommandPending()) {
@@ -922,13 +924,14 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
                 }
                 fsObj.getOpStatus().updateTaskStatus(opId, result.toOperation());
 
-                _dbClient.persistObject(fsObj);
+                _dbClient.updateObject(fsObj);
                 List<SMBFileShare> shares = new ArrayList<SMBFileShare>();
                 shares.add(smbFileShare);
 
                 if (result.isCommandSuccess()) {
                     _log.info("File share created successfully");
                     createDefaultACEForSMBShare(uri, smbShare, storageObj.getSystemType());
+                    WorkflowStepCompleter.stepSucceded(opId);
                 }
 
                 String eventMsg = result.isCommandSuccess() ? "" : result.getMessage();
@@ -949,7 +952,7 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
                 }
                 snapshotObj.getOpStatus().updateTaskStatus(opId, result.toOperation());
 
-                _dbClient.persistObject(snapshotObj);
+                _dbClient.updateObject(snapshotObj);
                 List<SMBFileShare> shares = new ArrayList<SMBFileShare>();
                 shares.add(smbFileShare);
 
@@ -965,6 +968,10 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
         } catch (Exception e) {
             String[] params = { storage.toString(), uri.toString(), smbShare.getName(), e.getMessage() };
             _log.error("Unable to create file system or snapshot share: storage {}, FS/snapshot URI {}, SMB share {}: {}", params);
+            // work flow fail
+            ServiceError serviceError = DeviceControllerException.errors.jobFailed(e);
+            WorkflowStepCompleter.stepFailed(opId, serviceError);
+
             updateTaskStatus(opId, fileObject, e);
             if (URIUtil.isType(uri, FileShare.class)) {
                 if ((fsObj != null) && (storageObj != null)) {
@@ -3426,7 +3433,7 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
         if (vNASURI != null) {
             VirtualNAS vNAS = _dbClient.queryObject(VirtualNAS.class, vNASURI);
             args.setvNAS(vNAS);
-	 }
+        }
     }
 
     /**
@@ -3454,7 +3461,7 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
     @Override
     public String addStepsForCreateFileSystems(Workflow workflow,
             String waitFor, List<FileDescriptor> filesystems, String taskId)
-            throws InternalException {
+                    throws InternalException {
 
         if (filesystems != null && !filesystems.isEmpty()) {
             // create source filesystems
@@ -3502,7 +3509,7 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
     @Override
     public String addStepsForDeleteFileSystems(Workflow workflow,
             String waitFor, List<FileDescriptor> filesystems, String taskId)
-            throws InternalException {
+                    throws InternalException {
         List<FileDescriptor> sourceDescriptors = FileDescriptor.filterByType(filesystems,
                 FileDescriptor.Type.FILE_DATA, FileDescriptor.Type.FILE_EXISTING_SOURCE,
                 FileDescriptor.Type.FILE_MIRROR_SOURCE);
@@ -3562,11 +3569,10 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
     @Override
     public String addStepsForExpandFileSystems(Workflow workflow, String waitFor,
             List<FileDescriptor> fileDescriptors, String taskId)
-            throws InternalException {
-        List<FileDescriptor> sourceDescriptors =
-                FileDescriptor.filterByType(fileDescriptors, FileDescriptor.Type.FILE_MIRROR_SOURCE,
-                        FileDescriptor.Type.FILE_EXISTING_SOURCE, FileDescriptor.Type.FILE_DATA,
-                        FileDescriptor.Type.FILE_MIRROR_TARGET);
+                    throws InternalException {
+        List<FileDescriptor> sourceDescriptors = FileDescriptor.filterByType(fileDescriptors, FileDescriptor.Type.FILE_MIRROR_SOURCE,
+                FileDescriptor.Type.FILE_EXISTING_SOURCE, FileDescriptor.Type.FILE_DATA,
+                FileDescriptor.Type.FILE_MIRROR_TARGET);
         if (sourceDescriptors == null || sourceDescriptors.isEmpty()) {
             return waitFor;
         } else {
@@ -3904,4 +3910,27 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
 
     }
 
+    static final String CREATE_FILESYSTEM_SHARE_METHOD = "share";
+
+    public String addStepsForCreatingTargetCIFSShares(Workflow workflow, String waitForFailover, URI fsURI, SMBShareMap smbShareMap,
+            String SMBshareCreationStep) {
+        String waitFor = null;
+        FileShare sourceFileShare = _dbClient.queryObject(FileShare.class, fsURI);
+        List<String> targetfileUris = new ArrayList<String>();
+        targetfileUris.addAll(sourceFileShare.getMirrorfsTargets());
+
+        FileShare targetFileShare = _dbClient.queryObject(FileShare.class, URI.create(targetfileUris.get(0)));
+        StorageSystem systemTarget = _dbClient.queryObject(StorageSystem.class, targetFileShare.getStorageDevice());
+
+        List<SMBFileShare> smbShares = new ArrayList<SMBFileShare>(smbShareMap.values());
+        for (SMBFileShare smbShare : smbShares) {
+            FileSMBShare fileSMBShare = new FileSMBShare(smbShare);
+            Object[] args = new Object[] { systemTarget.getId(), fsURI, fileSMBShare };
+            Workflow.Method SMBShareCreationMethod = new Workflow.Method(CREATE_FILESYSTEM_SHARE_METHOD, args);
+            waitFor = workflow.createStep(null, "Creating File System SMB Shares on Target Cluster",
+                    waitForFailover, systemTarget.getId(), systemTarget.getSystemType(), getClass(), SMBShareCreationMethod, null,
+                    SMBshareCreationStep);
+        }
+        return waitFor;
+    }
 }

@@ -4,12 +4,8 @@
  */
 package com.emc.storageos.fileorchestrationcontroller;
 
-import static com.emc.storageos.db.client.util.CommonTransformerFunctions.FCTN_STRING_TO_URI;
-import static com.google.common.collect.Collections2.transform;
-
 import java.io.Serializable;
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -18,7 +14,7 @@ import org.slf4j.LoggerFactory;
 import com.emc.storageos.Controller;
 import com.emc.storageos.db.client.DbClient;
 import com.emc.storageos.db.client.model.FileShare;
-import com.emc.storageos.db.client.model.Volume.PersonalityTypes;
+import com.emc.storageos.db.client.model.SMBShareMap;
 import com.emc.storageos.exceptions.DeviceControllerException;
 import com.emc.storageos.filereplicationcontroller.FileReplicationDeviceController;
 import com.emc.storageos.model.ResourceOperationTypeEnum;
@@ -29,8 +25,8 @@ import com.emc.storageos.volumecontroller.impl.FileDeviceController;
 import com.emc.storageos.volumecontroller.impl.file.CreateMirrorFileSystemsCompleter;
 import com.emc.storageos.volumecontroller.impl.file.FileCreateWorkflowCompleter;
 import com.emc.storageos.volumecontroller.impl.file.FileDeleteWorkflowCompleter;
+import com.emc.storageos.volumecontroller.impl.file.FileFailoverWorkFlowCompleter;
 import com.emc.storageos.volumecontroller.impl.file.FileWorkflowCompleter;
-import com.emc.storageos.volumecontroller.impl.file.MirrorFileFailoverTaskCompleter;
 import com.emc.storageos.workflow.Workflow;
 import com.emc.storageos.workflow.WorkflowException;
 import com.emc.storageos.workflow.WorkflowService;
@@ -309,41 +305,36 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
 
     @Override
     public void failoverFileSystem(URI fsURI, String taskId) throws ControllerException {
-
+        FileFailoverWorkFlowCompleter completer = null;
         Workflow workflow = null;
-
-        FileShare fileShare = s_dbClient.queryObject(FileShare.class, fsURI);
-        List<String> targetfileUris = new ArrayList<String>();
-        List<URI> combinedURI = new ArrayList<URI>();
-        if (PersonalityTypes.SOURCE.toString().equalsIgnoreCase(fileShare.getPersonality())) {
-            targetfileUris.addAll(fileShare.getMirrorfsTargets());
-
-            combinedURI.add(fileShare.getId());
-            combinedURI.addAll(transform(fileShare.getMirrorfsTargets(), FCTN_STRING_TO_URI));
-        }
-        MirrorFileFailoverTaskCompleter completer = new MirrorFileFailoverTaskCompleter(FileShare.class, combinedURI, taskId);
         try {
 
-            // Generate the Workflow.
+            FileShare fileShare = s_dbClient.queryObject(FileShare.class, fsURI);
+            completer = new FileFailoverWorkFlowCompleter(fsURI, taskId);
             workflow = _workflowService.getNewWorkflow(this, FAILOVER_FILESYSTEMS_WF_NAME, false, taskId);
-            String waitFor = null;
 
             s_logger.info("Generating steps for failover FileSystem");
 
-            // First, call the FileReplicationDeviceController to add its methods.
-            waitFor = _fileReplicationDeviceController.addStepsForFailoverFileSystems(workflow, waitFor, fsURI, completer, taskId);
+            String failoverStep = workflow.createStepId();
+            String waitForFailover = _fileReplicationDeviceController.addStepsForFailoverFileSystems(workflow, null, fsURI, failoverStep);
 
-            String successMessage = "Failover filesystems successful for: " + fsURI.toString();
+            String SMBshareCreationStep = workflow.createStepId();
+            SMBShareMap smbShareMap = fileShare.getSMBFileShares();
+            if (smbShareMap != null) {
+                String waitForShares = _fileDeviceController.addStepsForCreatingTargetCIFSShares(workflow, waitForFailover, fsURI,
+                        smbShareMap, SMBshareCreationStep);
+            }
+            String successMessage = "Failover filesystems successful for: " + fileShare.getLabel();
             Object[] callbackArgs = new Object[] { fsURI };
             workflow.executePlan(completer, successMessage, new WorkflowCallback(), callbackArgs, null, null);
 
         } catch (Exception ex) {
             s_logger.error("Could not failover filesystems: " + fsURI, ex);
-            releaseWorkflowLocks(workflow);
             String opName = ResourceOperationTypeEnum.FILE_PROTECTION_ACTION_FAILOVER.getName();
             ServiceError serviceError = DeviceControllerException.errors.createFileSharesFailed(
                     fsURI.toString(), opName, ex);
             completer.error(s_dbClient, _locker, serviceError);
         }
     }
+
 }

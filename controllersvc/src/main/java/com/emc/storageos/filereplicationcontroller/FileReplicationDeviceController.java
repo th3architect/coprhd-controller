@@ -906,9 +906,9 @@ public class FileReplicationDeviceController implements FileOrchestrationInterfa
     /**
      * TO DO
      */
-    public String addStepsForFailoverFileSystems(Workflow workflow,
-            String waitFor, URI fsURI, TaskCompleter completer, String taskId)
-                    throws InternalException {
+    public String addStepsForFailoverFileSystems(Workflow workflow, String waitFor, URI fsURI, String failoverStep)
+            throws InternalException {
+
         FileShare sourceFileShare = dbClient.queryObject(FileShare.class, fsURI);
         List<String> targetfileUris = new ArrayList<String>();
 
@@ -917,16 +917,15 @@ public class FileReplicationDeviceController implements FileOrchestrationInterfa
         StorageSystem systemTarget = dbClient.queryObject(StorageSystem.class, targetFileShare.getStorageDevice());
         StorageSystem systemSource = dbClient.queryObject(StorageSystem.class, sourceFileShare.getStorageDevice());
         String policyName = gerneratePolicyName(systemSource, targetFileShare);
+        MirrorFileFailoverTaskCompleter completer = new MirrorFileFailoverTaskCompleter(fsURI, targetFileShare.getId(),
+                failoverStep);
+        Object[] args = new Object[] { systemTarget.getId(), fsURI, completer, policyName };
 
-        String waitForFailover = null;
-        Workflow.Method failoverExecuteMethod = new Workflow.Method(FAILOVER_FILE_SHARE_METH, systemTarget.getId(), fsURI, completer,
-                policyName);
+        Workflow.Method failoverExecuteMethod = new Workflow.Method(FAILOVER_FILE_SHARE_METH, args);
 
-        waitForFailover = workflow.createStep("Failover", "Failover To Target File System :" + fsURI,
+        waitFor = workflow.createStep(null, "Failover To Target File System :" + fsURI,
                 waitFor, systemTarget.getId(), systemTarget.getSystemType(), getClass(),
-                failoverExecuteMethod, rollbackMethodNullMethod(), taskId);
-        return waitForFailover;
-
+                failoverExecuteMethod, rollbackMethodNullMethod(), failoverStep);
+        return waitFor;
     }
-
 }
