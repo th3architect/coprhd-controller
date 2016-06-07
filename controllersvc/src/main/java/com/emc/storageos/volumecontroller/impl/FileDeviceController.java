@@ -3925,9 +3925,10 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
         List<SMBFileShare> smbShares = new ArrayList<SMBFileShare>(smbShareMap.values());
         for (SMBFileShare smbShare : smbShares) {
             FileSMBShare fileSMBShare = new FileSMBShare(smbShare);
-            Object[] args = new Object[] { systemTarget.getId(), fsURI, fileSMBShare };
+            fileSMBShare.setPath(targetFileShare.getPath());
+            Object[] args = new Object[] { systemTarget.getId(), targetFileShare.getId(), fileSMBShare };
             Workflow.Method SMBShareCreationMethod = new Workflow.Method(CREATE_FILESYSTEM_SHARE_METHOD, args);
-            waitFor = workflow.createStep(null, "Creating File System SMB Shares on Target Cluster",
+            waitFor = workflow.createStep(null, "Creating File System SMB Shares On Target Cluster",
                     waitForFailover, systemTarget.getId(), systemTarget.getSystemType(), getClass(), SMBShareCreationMethod, null,
                     SMBshareCreationStep);
         }

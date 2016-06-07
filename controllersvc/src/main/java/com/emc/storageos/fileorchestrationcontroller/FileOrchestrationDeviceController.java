@@ -45,7 +45,7 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
     static final String EXPAND_FILESYSTEMS_WF_NAME = "EXPAND_FILESYSTEMS_WORKFLOW";
     static final String CHANGE_FILESYSTEMS_VPOOL_WF_NAME = "CHANGE_FILESYSTEMS_VPOOL_WORKFLOW";
     static final String CREATE_MIRROR_FILESYSTEMS_WF_NAME = "CREATE_MIRROR_FILESYSTEMS_WF_NAME";
-    static final String FAILOVER_FILESYSTEMS_WF_NAME = "failoverFileSystem";
+    static final String FAILOVER_FILESYSTEMS_WF_NAME = "FAILOVER_FILESYSTEM_WORKFLOW";
 
     /*
      * (non-Javadoc)
@@ -325,8 +325,7 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
                         smbShareMap, SMBshareCreationStep);
             }
             String successMessage = "Failover filesystems successful for: " + fileShare.getLabel();
-            Object[] callbackArgs = new Object[] { fsURI };
-            workflow.executePlan(completer, successMessage, new WorkflowCallback(), callbackArgs, null, null);
+            workflow.executePlan(completer, successMessage);
 
         } catch (Exception ex) {
             s_logger.error("Could not failover filesystems: " + fsURI, ex);
