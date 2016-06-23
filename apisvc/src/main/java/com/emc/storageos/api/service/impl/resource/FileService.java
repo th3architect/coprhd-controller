@@ -3098,9 +3098,18 @@ public class FileService extends TaskResourceService {
                 task, ResourceOperationTypeEnum.FILE_PROTECTION_ACTION_FAILOVER);
         op.setDescription("Filesystem Failover");
 
+        SMBShareMap smbShareMap = fs.getSMBFileShares();
+        StoragePort storageport = null;
+        if (smbShareMap != null) {
+            // One CIFS port for all shares for one target file system
+            List<String> targetfileUris = new ArrayList<String>();
+            targetfileUris.addAll(fs.getMirrorfsTargets());
+            FileShare targetFileShare = _dbClient.queryObject(FileShare.class, URI.create(targetfileUris.get(0)));
+            storageport = _fileScheduler.placeFileShareExport(targetFileShare, StorageProtocol.File.CIFS.name(), null);
+        }
         FileServiceApi fileServiceApi = getFileShareServiceImpl(fs, _dbClient);
         try {
-            fileServiceApi.failoverFileShare(id, task);
+            fileServiceApi.failoverFileShare(id, storageport, task);
         } catch (InternalException e) {
             if (_log.isErrorEnabled()) {
                 _log.error("", e);

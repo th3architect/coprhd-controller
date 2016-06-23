@@ -8,6 +8,7 @@ import java.net.URI;
 import java.util.List;
 
 import com.emc.storageos.Controller;
+import com.emc.storageos.db.client.model.StoragePort;
 import com.emc.storageos.volumecontroller.ControllerException;
 
 public interface FileOrchestrationController extends Controller {
@@ -49,10 +50,11 @@ public interface FileOrchestrationController extends Controller {
      * Failover fileshare
      * 
      * @param fsURI
+     * @param storagePort
      * @param taskId
      * @throws ControllerException
      */
-    public abstract void failoverFileSystem(URI fsURI, String taskId)
+    public abstract void fileSystemFailoverWorkflow(URI fsURI, StoragePort storageport, String taskId)
             throws ControllerException;
 
     /**

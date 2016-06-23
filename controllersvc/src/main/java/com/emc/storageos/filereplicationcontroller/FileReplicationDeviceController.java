@@ -464,7 +464,7 @@ public class FileReplicationDeviceController implements FileOrchestrationInterfa
                     completer = new MirrorFileFailoverTaskCompleter(FileShare.class, combined, opId);
                     completer.setNotifyWorkflow(false);
                     StorageSystem systemTarget = dbClient.queryObject(StorageSystem.class, targetFileShare.getStorageDevice());
-                    getRemoteMirrorDevice(systemTarget).doFailoverLink(systemTarget, targetFileShare, completer, null);
+                    getRemoteMirrorDevice(systemTarget).doFailoverLink(systemTarget, targetFileShare, completer);
                 }
 
             } else if (opType.equalsIgnoreCase("pause")) {
@@ -758,7 +758,7 @@ public class FileReplicationDeviceController implements FileOrchestrationInterfa
             completer = new MirrorFileFailbackTaskCompleter(FileShare.class, combined, opId);
             WorkflowStepCompleter.stepExecuting(opId);
             log.info("Execution of Failover Job Started");
-            getRemoteMirrorDevice(system).doFailoverLink(system, fileShare, completer, policyName);
+            getRemoteMirrorDevice(system).doFailoverLink(system, fileShare, completer);
         } catch (Exception e) {
             ServiceError error = DeviceControllerException.errors.jobFailed(e);
             if (null != completer) {
@@ -778,14 +778,14 @@ public class FileReplicationDeviceController implements FileOrchestrationInterfa
      * @param policyName
      * @param opId
      */
-    public boolean failoverFileSytem(URI storage, URI fileshareURI, TaskCompleter completer, String policyName, String opId) {
+    public boolean failoverFileSytem(URI storage, URI fileshareURI, TaskCompleter completer, String opId) {
 
         try {
             StorageSystem system = dbClient.queryObject(StorageSystem.class, storage);
             FileShare fileShare = dbClient.queryObject(FileShare.class, fileshareURI);
             WorkflowStepCompleter.stepExecuting(opId);
             log.info("Execution of Failover Job Started");
-            getRemoteMirrorDevice(system).doFailoverLink(system, fileShare, completer, policyName);
+            getRemoteMirrorDevice(system).doFailoverLink(system, fileShare, completer);
         } catch (Exception e) {
             ServiceError error = DeviceControllerException.errors.jobFailed(e);
             if (null != completer) {
@@ -906,26 +906,15 @@ public class FileReplicationDeviceController implements FileOrchestrationInterfa
     /**
      * TO DO
      */
-    public String addStepsForFailoverFileSystems(Workflow workflow, String waitFor, URI fsURI, String failoverStep)
-            throws InternalException {
-
-        FileShare sourceFileShare = dbClient.queryObject(FileShare.class, fsURI);
-        List<String> targetfileUris = new ArrayList<String>();
-
-        targetfileUris.addAll(sourceFileShare.getMirrorfsTargets());
-        FileShare targetFileShare = dbClient.queryObject(FileShare.class, URI.create(targetfileUris.get(0)));
-        StorageSystem systemTarget = dbClient.queryObject(StorageSystem.class, targetFileShare.getStorageDevice());
-        StorageSystem systemSource = dbClient.queryObject(StorageSystem.class, sourceFileShare.getStorageDevice());
-        String policyName = gerneratePolicyName(systemSource, targetFileShare);
-        MirrorFileFailoverTaskCompleter completer = new MirrorFileFailoverTaskCompleter(fsURI, targetFileShare.getId(),
-                failoverStep);
-        Object[] args = new Object[] { systemTarget.getId(), fsURI, completer, policyName };
-
+    public String addStepsForFailoverFileSystems(Workflow workflow, URI targetSystem, URI targetFsURI, TaskCompleter completer,
+            String failoverStep) throws InternalException {
+        StorageSystem system = dbClient.queryObject(StorageSystem.class, targetSystem);
+        Object[] args = new Object[] { system.getId(), targetFsURI, completer, };
         Workflow.Method failoverExecuteMethod = new Workflow.Method(FAILOVER_FILE_SHARE_METH, args);
 
-        waitFor = workflow.createStep(null, "Failover To Target File System :" + fsURI,
-                waitFor, systemTarget.getId(), systemTarget.getSystemType(), getClass(),
+        failoverStep = workflow.createStep(null, "Failover To Target File System :" + targetFsURI,
+                null, targetSystem, system.getSystemType(), getClass(),
                 failoverExecuteMethod, rollbackMethodNullMethod(), failoverStep);
-        return waitFor;
+        return failoverStep;
     }
 }

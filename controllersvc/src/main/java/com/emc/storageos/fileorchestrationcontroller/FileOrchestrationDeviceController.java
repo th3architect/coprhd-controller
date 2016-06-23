@@ -6,6 +6,7 @@ package com.emc.storageos.fileorchestrationcontroller;
 
 import java.io.Serializable;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -14,19 +15,24 @@ import org.slf4j.LoggerFactory;
 import com.emc.storageos.Controller;
 import com.emc.storageos.db.client.DbClient;
 import com.emc.storageos.db.client.model.FileShare;
+import com.emc.storageos.db.client.model.SMBFileShare;
 import com.emc.storageos.db.client.model.SMBShareMap;
+import com.emc.storageos.db.client.model.StoragePort;
+import com.emc.storageos.db.client.model.StorageSystem;
 import com.emc.storageos.exceptions.DeviceControllerException;
 import com.emc.storageos.filereplicationcontroller.FileReplicationDeviceController;
 import com.emc.storageos.model.ResourceOperationTypeEnum;
 import com.emc.storageos.svcs.errorhandling.model.ServiceError;
 import com.emc.storageos.volumecontroller.ControllerException;
 import com.emc.storageos.volumecontroller.ControllerLockingService;
+import com.emc.storageos.volumecontroller.FileSMBShare;
 import com.emc.storageos.volumecontroller.impl.FileDeviceController;
 import com.emc.storageos.volumecontroller.impl.file.CreateMirrorFileSystemsCompleter;
 import com.emc.storageos.volumecontroller.impl.file.FileCreateWorkflowCompleter;
 import com.emc.storageos.volumecontroller.impl.file.FileDeleteWorkflowCompleter;
 import com.emc.storageos.volumecontroller.impl.file.FileFailoverWorkFlowCompleter;
 import com.emc.storageos.volumecontroller.impl.file.FileWorkflowCompleter;
+import com.emc.storageos.volumecontroller.impl.file.MirrorFileFailoverTaskCompleter;
 import com.emc.storageos.workflow.Workflow;
 import com.emc.storageos.workflow.WorkflowException;
 import com.emc.storageos.workflow.WorkflowService;
@@ -304,27 +310,28 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
     }
 
     @Override
-    public void failoverFileSystem(URI fsURI, String taskId) throws ControllerException {
+    public void fileSystemFailoverWorkflow(URI fsURI, StoragePort storageport, String taskId) throws ControllerException {
         FileFailoverWorkFlowCompleter completer = null;
         Workflow workflow = null;
         try {
+            FileShare sourceFileShare = s_dbClient.queryObject(FileShare.class, fsURI);
+            List<String> targetfileUris = new ArrayList<String>();
+            targetfileUris.addAll(sourceFileShare.getMirrorfsTargets());
+            FileShare targetFileShare = s_dbClient.queryObject(FileShare.class, URI.create(targetfileUris.get(0)));
+            StorageSystem systemTarget = s_dbClient.queryObject(StorageSystem.class, targetFileShare.getStorageDevice());
 
-            FileShare fileShare = s_dbClient.queryObject(FileShare.class, fsURI);
             completer = new FileFailoverWorkFlowCompleter(fsURI, taskId);
             workflow = _workflowService.getNewWorkflow(this, FAILOVER_FILESYSTEMS_WF_NAME, false, taskId);
 
-            s_logger.info("Generating steps for failover FileSystem");
+            // Step 1
+            String waitForFailover = failoverFileSystem(workflow, systemTarget.getId(), sourceFileShare.getId(), targetFileShare.getId());
 
-            String failoverStep = workflow.createStepId();
-            String waitForFailover = _fileReplicationDeviceController.addStepsForFailoverFileSystems(workflow, null, fsURI, failoverStep);
-
-            String SMBshareCreationStep = workflow.createStepId();
-            SMBShareMap smbShareMap = fileShare.getSMBFileShares();
+            // Step 2
+            SMBShareMap smbShareMap = sourceFileShare.getSMBFileShares();
             if (smbShareMap != null) {
-                String waitForShares = _fileDeviceController.addStepsForCreatingTargetCIFSShares(workflow, waitForFailover, fsURI,
-                        smbShareMap, SMBshareCreationStep);
+                replicateCIFSshareToTarget(workflow, systemTarget.getId(), targetFileShare, smbShareMap, storageport, waitForFailover);
             }
-            String successMessage = "Failover filesystems successful for: " + fileShare.getLabel();
+            String successMessage = "Failover filesystems successful for: " + sourceFileShare.getLabel();
             workflow.executePlan(completer, successMessage);
 
         } catch (Exception ex) {
@@ -336,4 +343,34 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
         }
     }
 
+    String failoverFileSystem(Workflow workflow, URI systemTarget, URI sourceFileShare, URI targetFileShare) {
+        s_logger.info("Step 1 : failover FileSystem to target Cluster");
+
+        String failoverStep = workflow.createStepId();
+        MirrorFileFailoverTaskCompleter completer = new MirrorFileFailoverTaskCompleter(sourceFileShare, targetFileShare,
+                failoverStep);
+        String waitForFailover = _fileReplicationDeviceController.addStepsForFailoverFileSystems(workflow, systemTarget, targetFileShare,
+                completer, failoverStep);
+        return waitForFailover;
+    }
+
+    String replicateCIFSshareToTarget(Workflow workflow, URI systemTarget, FileShare targetFileShare,
+            SMBShareMap smbShareMap, StoragePort sport, String waitForFailover) {
+        String waitForShares = null;
+        s_logger.info("Step 2 :Replicate source CIFFS shares to target Cluster");
+        String shareCreationStep = workflow.createStepId();
+
+        List<SMBFileShare> smbShares = new ArrayList<SMBFileShare>(smbShareMap.values());
+
+        for (SMBFileShare smbShare : smbShares) {
+            FileSMBShare fileSMBShare = new FileSMBShare(smbShare);
+            fileSMBShare.setStoragePortName(sport.getPortName());
+            fileSMBShare.setStoragePortNetworkId(sport.getPortNetworkId());
+            fileSMBShare.setStoragePortGroup(sport.getPortGroup());
+            fileSMBShare.setPath(targetFileShare.getPath());
+            waitForShares = _fileDeviceController.addStepsForCreatingCIFSShares(workflow, systemTarget, targetFileShare.getId(),
+                    fileSMBShare, waitForFailover, shareCreationStep);
+        }
+        return waitForShares;
+    }
 }

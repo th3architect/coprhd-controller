@@ -102,6 +102,8 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
     private static final String EVENT_SERVICE_TYPE = "file";
     private static final String EVENT_SERVICE_SOURCE = "FileController";
     private static final Logger _log = LoggerFactory.getLogger(FileDeviceController.class);
+    private static final String CREATE_FILESYSTEM_EXPORT_METHOD = "export";
+    private static final String CREATE_FILESYSTEM_SHARE_METHOD = "share";
     private Map<String, FileStorageDevice> _devices;
 
     private WorkflowService _workflowService;
@@ -3910,28 +3912,29 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
 
     }
 
-    static final String CREATE_FILESYSTEM_SHARE_METHOD = "share";
+    public String addStepsForCreatingCIFSShares(Workflow workflow, URI storageSystem, URI fileSystem, FileSMBShare smbShare,
+            String waitfor, String shareStep) {
 
-    public String addStepsForCreatingTargetCIFSShares(Workflow workflow, String waitForFailover, URI fsURI, SMBShareMap smbShareMap,
-            String SMBshareCreationStep) {
-        String waitFor = null;
-        FileShare sourceFileShare = _dbClient.queryObject(FileShare.class, fsURI);
-        List<String> targetfileUris = new ArrayList<String>();
-        targetfileUris.addAll(sourceFileShare.getMirrorfsTargets());
+        StorageSystem system = _dbClient.queryObject(StorageSystem.class, storageSystem);
+        Object[] args = new Object[] { storageSystem, fileSystem, smbShare };
+        Workflow.Method shareCreationMethod = new Workflow.Method(CREATE_FILESYSTEM_SHARE_METHOD, args);
 
-        FileShare targetFileShare = _dbClient.queryObject(FileShare.class, URI.create(targetfileUris.get(0)));
-        StorageSystem systemTarget = _dbClient.queryObject(StorageSystem.class, targetFileShare.getStorageDevice());
+        String waitForShare = workflow.createStep(null, "Creating FileSystem SMB Share", waitfor, storageSystem, system.getSystemType(),
+                getClass(), shareCreationMethod, null, shareStep);
 
-        List<SMBFileShare> smbShares = new ArrayList<SMBFileShare>(smbShareMap.values());
-        for (SMBFileShare smbShare : smbShares) {
-            FileSMBShare fileSMBShare = new FileSMBShare(smbShare);
-            fileSMBShare.setPath(targetFileShare.getPath());
-            Object[] args = new Object[] { systemTarget.getId(), targetFileShare.getId(), fileSMBShare };
-            Workflow.Method SMBShareCreationMethod = new Workflow.Method(CREATE_FILESYSTEM_SHARE_METHOD, args);
-            waitFor = workflow.createStep(null, "Creating File System SMB Shares On Target Cluster",
-                    waitForFailover, systemTarget.getId(), systemTarget.getSystemType(), getClass(), SMBShareCreationMethod, null,
-                    SMBshareCreationStep);
-        }
+        return waitForShare;
+    }
+
+    public String addStepsForCreatingNFSExport(Workflow workflow, URI storage, URI fsURI, List<FileShareExport> exports, String opId,
+            String exportStep) {
+
+        StorageSystem system = _dbClient.queryObject(StorageSystem.class, storage);
+        Object[] args = new Object[] { storage, fsURI, exports };
+        Workflow.Method exportCreationMethod = new Workflow.Method(CREATE_FILESYSTEM_EXPORT_METHOD, args);
+
+        String waitFor = workflow.createStep(null, "Creating FileSystem NFS Export",
+                null, storage, system.getSystemType(), getClass(), exportCreationMethod, null, exportStep);
+
         return waitFor;
     }
 }

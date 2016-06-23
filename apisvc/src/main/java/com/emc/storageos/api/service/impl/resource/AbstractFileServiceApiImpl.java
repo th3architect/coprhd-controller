@@ -21,6 +21,7 @@ import com.emc.storageos.db.client.DbClient;
 import com.emc.storageos.db.client.model.DataObject;
 import com.emc.storageos.db.client.model.FileShare;
 import com.emc.storageos.db.client.model.Project;
+import com.emc.storageos.db.client.model.StoragePort;
 import com.emc.storageos.db.client.model.TenantOrg;
 import com.emc.storageos.db.client.model.VirtualArray;
 import com.emc.storageos.db.client.model.VirtualPool;
@@ -220,9 +221,9 @@ public abstract class AbstractFileServiceApiImpl<T> implements FileServiceApi {
     }
 
     @Override
-    public void failoverFileShare(URI fsURI, String taskId) {
+    public void failoverFileShare(URI fsURI, StoragePort storageport, String taskId) {
         FileOrchestrationController controller = getController(FileOrchestrationController.class,
                 FileOrchestrationController.FILE_ORCHESTRATION_DEVICE);
-        controller.failoverFileSystem(fsURI, taskId);
+        controller.fileSystemFailoverWorkflow(fsURI, storageport, taskId);
     }
 }
