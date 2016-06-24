@@ -6,7 +6,6 @@ import java.util.List;
 import com.emc.storageos.db.client.model.DataObject;
 import com.emc.storageos.db.client.model.FileShare;
 import com.emc.storageos.db.client.model.Project;
-import com.emc.storageos.db.client.model.StoragePort;
 import com.emc.storageos.db.client.model.TenantOrg;
 import com.emc.storageos.db.client.model.VirtualArray;
 import com.emc.storageos.db.client.model.VirtualPool;
@@ -14,6 +13,7 @@ import com.emc.storageos.model.TaskList;
 import com.emc.storageos.model.TaskResourceRep;
 import com.emc.storageos.model.file.FileSystemParam;
 import com.emc.storageos.svcs.errorhandling.resources.InternalException;
+import com.emc.storageos.volumecontroller.FileSMBShare;
 import com.emc.storageos.volumecontroller.Recommendation;
 import com.emc.storageos.volumecontroller.impl.utils.VirtualPoolCapabilityValuesWrapper;
 
@@ -87,11 +87,11 @@ public interface FileServiceApi {
      * Failover the File System to target system
      *
      * @param fsURI
-     * @param StoragePort
+     * @param FileSMBShare
      * @param taskId
      * @throws InternalException
      */
-    public void failoverFileShare(URI fsURI, StoragePort storageport, String taskId)
+    public void failoverFileShare(URI fsURI, FileSMBShare smbShare, String taskId)
             throws InternalException;
 
     /**

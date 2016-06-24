@@ -3099,17 +3099,20 @@ public class FileService extends TaskResourceService {
         op.setDescription("Filesystem Failover");
 
         SMBShareMap smbShareMap = fs.getSMBFileShares();
-        StoragePort storageport = null;
+        FileSMBShare smbShare = null;
         if (smbShareMap != null) {
             // One CIFS port for all shares for one target file system
             List<String> targetfileUris = new ArrayList<String>();
             targetfileUris.addAll(fs.getMirrorfsTargets());
             FileShare targetFileShare = _dbClient.queryObject(FileShare.class, URI.create(targetfileUris.get(0)));
-            storageport = _fileScheduler.placeFileShareExport(targetFileShare, StorageProtocol.File.CIFS.name(), null);
+            StoragePort storageport = _fileScheduler.placeFileShareExport(targetFileShare, StorageProtocol.File.CIFS.name(), null);
+            smbShare = new FileSMBShare();
+            smbShare.setStoragePortName(storageport.getPortName());
+            smbShare.setStoragePortNetworkId(storageport.getPortNetworkId());
         }
         FileServiceApi fileServiceApi = getFileShareServiceImpl(fs, _dbClient);
         try {
-            fileServiceApi.failoverFileShare(id, storageport, task);
+            fileServiceApi.failoverFileShare(id, smbShare, task);
         } catch (InternalException e) {
             if (_log.isErrorEnabled()) {
                 _log.error("", e);

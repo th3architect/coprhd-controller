@@ -4,9 +4,9 @@
  */
 package com.emc.storageos.volumecontroller;
 
-import com.emc.storageos.db.client.model.SMBFileShare;
-
 import java.io.Serializable;
+
+import com.emc.storageos.db.client.model.SMBFileShare;
 
 /**
  * FileSMBShare class keeps SMB share data. Transient class.
@@ -38,7 +38,7 @@ public class FileSMBShare implements Serializable {
     private String _mountPoint;
     private String _path;
     private boolean _isSubDirPath;
-    private String _NetBIOSName;
+    private String _netBIOSName;
 
     /**
      * Construction of SMB share
@@ -82,6 +82,12 @@ public class FileSMBShare implements Serializable {
 
     public FileSMBShare(String name, String description, String maxUsers) {
         this(name, description, maxUsers, null);
+    }
+
+    /**
+     * Constructor of FileSMBShare
+     */
+    public FileSMBShare() {
     }
 
     /**
@@ -138,11 +144,11 @@ public class FileSMBShare implements Serializable {
     }
 
     public String getNetBIOSName() {
-        return _NetBIOSName;
+        return _netBIOSName;
     }
 
-    public void setNetBIOSName(String NetBIOSName) {
-        this._NetBIOSName = NetBIOSName;
+    public void setNetBIOSName(String netBIOSName) {
+        this._netBIOSName = netBIOSName;
     }
 
     public String getStoragePortGroup() {
@@ -187,7 +193,7 @@ public class FileSMBShare implements Serializable {
         smbShare.setSubDir(_isSubDirPath);
         smbShare.setStoragePortName(_storagePortName);
         smbShare.setStoragePortNetworkId(_storagePortNetworkId);
-        smbShare.setNetBIOSName(_NetBIOSName);
+        smbShare.setNetBIOSName(_netBIOSName);
         return smbShare;
 
     }
