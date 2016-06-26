@@ -580,7 +580,7 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
             } else {
                 _log.info("Exports are null");
             }
-
+            WorkflowStepCompleter.stepExecuting(opId);
             BiosCommandResult result = getDevice(storageObj.getSystemType()).doExport(storageObj, args, fileExports);
 
             if (result.getCommandPending()) {
@@ -605,6 +605,7 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
 
                     // Per New Model of Export Rules Lets create the rule and save it as FileExportRule.
                     if (result.isCommandSuccess()) {
+                        WorkflowStepCompleter.stepSucceded(opId);
                         FileExportRule newRule = getFileExportRule(fsObj.getId(), fileExport, args);
                         _log.debug("ExportRule Constucted per expotkey {}, {}", fsExpKey, newRule);
                         if (existingRules != null && existingRules.isEmpty()) {
@@ -648,6 +649,8 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
             _dbClient.persistObject(fsObj);
 
         } catch (Exception e) {
+            ServiceError serviceError = DeviceControllerException.errors.jobFailed(e);
+            WorkflowStepCompleter.stepFailed(opId, serviceError);
             String[] params = { storage.toString(), uri.toString(), e.getMessage() };
             _log.error("Unable to export file system or snapshot: storage {}, FS/snapshot URI {}: {}", params);
             for (FileShareExport fsExport : exports) {
@@ -3913,28 +3916,28 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
     }
 
     public String addStepsForCreatingCIFSShares(Workflow workflow, URI storageSystem, URI fileSystem, FileSMBShare smbShare,
-            String waitfor, String shareStep) {
+            String waitfor, String shareStep, String stepDescription) {
 
         StorageSystem system = _dbClient.queryObject(StorageSystem.class, storageSystem);
         Object[] args = new Object[] { storageSystem, fileSystem, smbShare };
         Workflow.Method shareCreationMethod = new Workflow.Method(CREATE_FILESYSTEM_SHARE_METHOD, args);
 
-        String waitForShare = workflow.createStep(null, "Creating FileSystem SMB Share", waitfor, storageSystem, system.getSystemType(),
-                getClass(), shareCreationMethod, null, shareStep);
+        String waitForShare = workflow.createStep(null, stepDescription, waitfor, storageSystem, system.getSystemType(), getClass(),
+                shareCreationMethod, null, shareStep);
 
         return waitForShare;
     }
 
-    public String addStepsForCreatingNFSExport(Workflow workflow, URI storage, URI fsURI, List<FileShareExport> exports, String opId,
-            String exportStep) {
+    public String addStepsForCreatingNFSExport(Workflow workflow, URI storage, URI fsURI, List<FileShareExport> exports, String waitFor,
+            String exportStep, String stepDescription) {
 
         StorageSystem system = _dbClient.queryObject(StorageSystem.class, storage);
         Object[] args = new Object[] { storage, fsURI, exports };
         Workflow.Method exportCreationMethod = new Workflow.Method(CREATE_FILESYSTEM_EXPORT_METHOD, args);
 
-        String waitFor = workflow.createStep(null, "Creating FileSystem NFS Export",
-                null, storage, system.getSystemType(), getClass(), exportCreationMethod, null, exportStep);
+        String waitForExport = workflow.createStep(null, stepDescription, waitFor, storage, system.getSystemType(), getClass(),
+                exportCreationMethod, null, exportStep);
 
-        return waitFor;
+        return waitForExport;
     }
 }

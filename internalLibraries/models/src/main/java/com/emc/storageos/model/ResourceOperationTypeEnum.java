@@ -103,7 +103,7 @@ public enum ResourceOperationTypeEnum {
     FILE_PROTECTION_ACTION_PAUSE("FILE PROTECTION ACTION PAUSE", "pause the replication link between source and target"),
     FILE_PROTECTION_ACTION_SUSPEND("FILE PROTECTION ACTION SUSPEND", "suspend the replication link between source and target"),
     FILE_PROTECTION_ACTION_RESUME("FILE PROTECTION ACTION RESUME", "resume the replication link between source and target"),
-    FILE_PROTECTION_ACTION_FAILOVER("FILE PROTECTION ACTION FAILOVER", "failover target fileshare(s)"),
+    FILE_PROTECTION_ACTION_FAILOVER("FILE PROTECTION ACTION FAILOVER", "failover source file system to target system"),
     FILE_PROTECTION_ACTION_FAILBACK("FILE PROTECTION ACTION FAILBACK", "failback the replication link source and target fileshare(s)"),
     FILE_PROTECTION_ACTION_REFRESH("FILE PROTECTION ACTION REFRESH", "refresh the replication link between source and target"),
     UPDATE_EXPORT_RULES_FILE_SYSTEM("UPDATE EXPORT RULES FILESYSTEM", "Update export rules filesystem operation"),

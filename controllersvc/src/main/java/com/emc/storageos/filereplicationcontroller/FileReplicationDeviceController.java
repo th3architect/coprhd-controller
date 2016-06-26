@@ -903,17 +903,13 @@ public class FileReplicationDeviceController implements FileOrchestrationInterfa
         }
     }
 
-    /**
-     * TO DO
-     */
     public String addStepsForFailoverFileSystems(Workflow workflow, URI targetSystem, URI targetFsURI, TaskCompleter completer,
-            String failoverStep) throws InternalException {
+            String failoverStep, String stepDescription) throws InternalException {
         StorageSystem system = dbClient.queryObject(StorageSystem.class, targetSystem);
-        Object[] args = new Object[] { system.getId(), targetFsURI, completer, };
+        Object[] args = new Object[] { system.getId(), targetFsURI, completer };
         Workflow.Method failoverExecuteMethod = new Workflow.Method(FAILOVER_FILE_SHARE_METH, args);
 
-        failoverStep = workflow.createStep(null, "Failover To Target File System :" + targetFsURI,
-                null, targetSystem, system.getSystemType(), getClass(),
+        failoverStep = workflow.createStep(null, stepDescription, null, targetSystem, system.getSystemType(), getClass(),
                 failoverExecuteMethod, rollbackMethodNullMethod(), failoverStep);
         return failoverStep;
     }

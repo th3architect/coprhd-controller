@@ -8,9 +8,9 @@ import java.net.URI;
 import java.util.List;
 
 import com.emc.storageos.db.client.DbClient;
+import com.emc.storageos.db.client.model.StoragePort;
 import com.emc.storageos.db.client.util.NullColumnValueGetter;
 import com.emc.storageos.volumecontroller.ControllerException;
-import com.emc.storageos.volumecontroller.FileSMBShare;
 import com.emc.storageos.volumecontroller.impl.Dispatcher;
 
 public class FileOrchestrationControllerImpl implements FileOrchestrationController {
@@ -75,7 +75,7 @@ public class FileOrchestrationControllerImpl implements FileOrchestrationControl
     }
 
     @Override
-    public void fileSystemFailoverWorkflow(URI fsURI, FileSMBShare smbShare, String taskId) throws ControllerException {
-        execOrchestration("fileSystemFailoverWorkflow", fsURI, smbShare, taskId);
+    public void fileSystemFailoverWorkflow(URI fsURI, StoragePort nfsPort, StoragePort cifsPort, String taskId) throws ControllerException {
+        execOrchestration("fileSystemFailoverWorkflow", fsURI, nfsPort, cifsPort, taskId);
     }
 }

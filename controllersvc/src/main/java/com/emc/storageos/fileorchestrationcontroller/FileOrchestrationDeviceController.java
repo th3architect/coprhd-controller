@@ -7,6 +7,7 @@ package com.emc.storageos.fileorchestrationcontroller;
 import java.io.Serializable;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -19,6 +20,7 @@ import com.emc.storageos.db.client.model.FileExport;
 import com.emc.storageos.db.client.model.FileShare;
 import com.emc.storageos.db.client.model.SMBFileShare;
 import com.emc.storageos.db.client.model.SMBShareMap;
+import com.emc.storageos.db.client.model.StoragePort;
 import com.emc.storageos.db.client.model.StorageSystem;
 import com.emc.storageos.exceptions.DeviceControllerException;
 import com.emc.storageos.filereplicationcontroller.FileReplicationDeviceController;
@@ -27,6 +29,7 @@ import com.emc.storageos.svcs.errorhandling.model.ServiceError;
 import com.emc.storageos.volumecontroller.ControllerException;
 import com.emc.storageos.volumecontroller.ControllerLockingService;
 import com.emc.storageos.volumecontroller.FileSMBShare;
+import com.emc.storageos.volumecontroller.FileShareExport;
 import com.emc.storageos.volumecontroller.impl.FileDeviceController;
 import com.emc.storageos.volumecontroller.impl.file.CreateMirrorFileSystemsCompleter;
 import com.emc.storageos.volumecontroller.impl.file.FileCreateWorkflowCompleter;
@@ -311,7 +314,7 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
     }
 
     @Override
-    public void fileSystemFailoverWorkflow(URI fsURI, FileSMBShare smbShare, String taskId) throws ControllerException {
+    public void fileSystemFailoverWorkflow(URI fsURI, StoragePort nfsPort, StoragePort cifsPort, String taskId) throws ControllerException {
         FileFailoverWorkFlowCompleter completer = null;
         Workflow workflow = null;
         try {
@@ -325,17 +328,17 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
             workflow = _workflowService.getNewWorkflow(this, FAILOVER_FILESYSTEMS_WF_NAME, false, taskId);
 
             // Step1:Failover to Target Cluster
-            String waitForFailover = failoverFileSystem(workflow, systemTarget.getId(), sourceFileShare.getId(), targetFileShare.getId());
+            String waitForFailover = failoverFileSystem(workflow, systemTarget.getId(), sourceFileShare, targetFileShare);
 
             // Step2:Replicate CIFS share to Target Cluster
             SMBShareMap smbShareMap = sourceFileShare.getSMBFileShares();
-            if (smbShareMap != null) {
-                replicateCIFSsharesToTarget(workflow, systemTarget.getId(), targetFileShare, smbShareMap, smbShare, waitForFailover);
+            if (smbShareMap != null && cifsPort != null) {
+                replicateCIFSsharesToTarget(workflow, systemTarget.getId(), targetFileShare, smbShareMap, cifsPort, waitForFailover);
             }
             // Step3: Replicate NFS export to Target Cluster
             FSExportMap nfsExportMap = sourceFileShare.getFsExports();
-            if (nfsExportMap != null) {
-
+            if (nfsExportMap != null && nfsPort != null) {
+                replicateNFSExportsToTarget(workflow, systemTarget.getId(), targetFileShare, nfsExportMap, nfsPort, waitForFailover);
             }
             String successMessage = "Failover filesystems successful for: " + sourceFileShare.getLabel();
             workflow.executePlan(completer, successMessage);
@@ -349,19 +352,21 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
         }
     }
 
-    String failoverFileSystem(Workflow workflow, URI systemTarget, URI sourceFileShare, URI targetFileShare) {
+    String failoverFileSystem(Workflow workflow, URI systemTarget, FileShare sourceFileShare, FileShare targetFileShare) {
         s_logger.info("Step 1 : failover FileSystem to target Cluster");
 
         String failoverStep = workflow.createStepId();
-        MirrorFileFailoverTaskCompleter completer = new MirrorFileFailoverTaskCompleter(sourceFileShare, targetFileShare,
+        MirrorFileFailoverTaskCompleter completer = new MirrorFileFailoverTaskCompleter(sourceFileShare.getId(), targetFileShare.getId(),
                 failoverStep);
-        String waitForFailover = _fileReplicationDeviceController.addStepsForFailoverFileSystems(workflow, systemTarget, targetFileShare,
-                completer, failoverStep);
+        String stepDescription = "Failover Source File System:" + sourceFileShare.getLabel() + " To Target Cluster";
+
+        String waitForFailover = _fileReplicationDeviceController.addStepsForFailoverFileSystems(workflow, systemTarget,
+                targetFileShare.getId(), completer, failoverStep, stepDescription);
         return waitForFailover;
     }
 
     String replicateCIFSsharesToTarget(Workflow workflow, URI systemTarget, FileShare targetFileShare,
-            SMBShareMap smbShareMap, FileSMBShare smbSharePort, String waitForFailover) {
+            SMBShareMap smbShareMap, StoragePort cifsPort, String waitForFailover) {
         String waitForShares = null;
         s_logger.info("Step 2 :Replicate source CIFS shares to target Cluster");
         String shareCreationStep = workflow.createStepId();
@@ -370,30 +375,34 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
 
         for (SMBFileShare smbShare : smbShares) {
             FileSMBShare fileSMBShare = new FileSMBShare(smbShare);
-            fileSMBShare.setStoragePortName(smbSharePort.getStoragePortName());
-            fileSMBShare.setStoragePortNetworkId(smbSharePort.getStoragePortNetworkId());
+            fileSMBShare.setStoragePortName(cifsPort.getPortName());
+            fileSMBShare.setStoragePortNetworkId(cifsPort.getPortNetworkId());
             fileSMBShare.setPath(targetFileShare.getPath());
+            String stepDescription = "Replicating Source File System SMB Share:" + fileSMBShare.getName() + " To Target Cluster";
             waitForShares = _fileDeviceController.addStepsForCreatingCIFSShares(workflow, systemTarget, targetFileShare.getId(),
-                    fileSMBShare, waitForFailover, shareCreationStep);
+                    fileSMBShare, waitForFailover, shareCreationStep, stepDescription);
         }
         return waitForShares;
     }
 
     String replicateNFSExportsToTarget(Workflow workflow, URI systemTarget, FileShare targetFileShare,
-            FSExportMap nfsExportMap, FileSMBShare smbSharePort, String waitForFailover) {
+            FSExportMap nfsExportMap, StoragePort nfsPort, String waitForFailover) {
         String waitForExport = null;
         s_logger.info("Step 3 :Replicate source NFS exports to target Cluster");
         String exportCreationStep = workflow.createStepId();
 
         List<FileExport> nfsExports = new ArrayList<FileExport>(nfsExportMap.values());
-        return waitForExport;
-        /*
-         * for (FileExport nfsExport : nfsExports) {
-         * 
-         * waitForShares = _fileDeviceController.addStepsForCreatingCIFSShares(workflow, systemTarget, targetFileShare.getId(),
-         * fileSMBShare, waitForFailover, shareCreationStep);
-         * }
-         */
 
+        for (FileExport nfsExport : nfsExports) {
+            FileShareExport fileNFSExport = new FileShareExport(nfsExport.getClients(), nfsExport.getSecurityType(),
+                    nfsExport.getPermissions(), nfsExport.getRootUserMapping(),
+                    nfsExport.getProtocol(), nfsPort.getPortName(), nfsPort.getPortNetworkId(), targetFileShare.getPath(),
+                    targetFileShare.getMountPath(), nfsExport.getSubDirectory(),
+                    nfsExport.getComments());
+            String stepDescription = "Replicating Source File System NFS Export:" + nfsExport.getMountPath() + " To Target Cluster";
+            waitForExport = _fileDeviceController.addStepsForCreatingNFSExport(workflow, systemTarget, targetFileShare.getId(),
+                    Arrays.asList(fileNFSExport), waitForFailover, exportCreationStep, stepDescription);
+        }
+        return waitForExport;
     }
 }

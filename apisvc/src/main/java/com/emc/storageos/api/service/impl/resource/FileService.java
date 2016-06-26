@@ -3071,6 +3071,8 @@ public class FileService extends TaskResourceService {
     @CheckPermission(roles = { Role.TENANT_ADMIN }, acls = { ACL.OWN, ACL.ALL })
     public TaskList failoverProtection(@PathParam("id") URI id, FileReplicationParam param) throws ControllerException {
         TaskResourceRep taskResp = null;
+        StoragePort storageportNFS = null;
+        StoragePort storageportCIFS = null;
         TaskList taskList = new TaskList();
         String task = UUID.randomUUID().toString();
         ArgValidator.checkFieldUriType(id, FileShare.class, "id");
@@ -3098,21 +3100,22 @@ public class FileService extends TaskResourceService {
                 task, ResourceOperationTypeEnum.FILE_PROTECTION_ACTION_FAILOVER);
         op.setDescription("Filesystem Failover");
 
+        List<String> targetfileUris = new ArrayList<String>();
+        targetfileUris.addAll(fs.getMirrorfsTargets());
+        FileShare targetFileShare = _dbClient.queryObject(FileShare.class, URI.create(targetfileUris.get(0)));
+
         SMBShareMap smbShareMap = fs.getSMBFileShares();
-        FileSMBShare smbShare = null;
         if (smbShareMap != null) {
-            // One CIFS port for all shares for one target file system
-            List<String> targetfileUris = new ArrayList<String>();
-            targetfileUris.addAll(fs.getMirrorfsTargets());
-            FileShare targetFileShare = _dbClient.queryObject(FileShare.class, URI.create(targetfileUris.get(0)));
-            StoragePort storageport = _fileScheduler.placeFileShareExport(targetFileShare, StorageProtocol.File.CIFS.name(), null);
-            smbShare = new FileSMBShare();
-            smbShare.setStoragePortName(storageport.getPortName());
-            smbShare.setStoragePortNetworkId(storageport.getPortNetworkId());
+            storageportCIFS = _fileScheduler.placeFileShareExport(targetFileShare, StorageProtocol.File.CIFS.name(), null);
         }
+        FSExportMap nfsExportMap = fs.getFsExports();
+        if (nfsExportMap != null) {
+            storageportNFS = _fileScheduler.placeFileShareExport(targetFileShare, StorageProtocol.File.NFS.name(), null);
+        }
+
         FileServiceApi fileServiceApi = getFileShareServiceImpl(fs, _dbClient);
         try {
-            fileServiceApi.failoverFileShare(id, smbShare, task);
+            fileServiceApi.failoverFileShare(id, storageportNFS, storageportCIFS, task);
         } catch (InternalException e) {
             if (_log.isErrorEnabled()) {
                 _log.error("", e);
