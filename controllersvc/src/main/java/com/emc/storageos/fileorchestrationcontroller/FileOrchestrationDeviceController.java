@@ -259,13 +259,9 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
 
     @SuppressWarnings("serial")
     public static class WorkflowCallback implements Workflow.WorkflowCallbackHandler, Serializable {
-        @SuppressWarnings("unchecked")
         @Override
         public void workflowComplete(Workflow workflow, Object[] args)
                 throws WorkflowException {
-            List<URI> filesystems = (List<URI>) args[0];
-            // String msg = FileDeviceController.getFileSharesMsg(_dbClient, filesystems);
-            // s_logger.info("Processed FileShares:\n" + msg);
         }
     }
 
@@ -290,7 +286,7 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
     }
 
     public void setDbClient(DbClient dbClient) {
-        this.s_dbClient = dbClient;
+        FileOrchestrationDeviceController.s_dbClient = dbClient;
     }
 
     public void setLocker(ControllerLockingService locker) {
@@ -302,7 +298,7 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
     }
 
     public void setFileDeviceController(FileDeviceController fileDeviceController) {
-        this._fileDeviceController = fileDeviceController;
+        FileOrchestrationDeviceController._fileDeviceController = fileDeviceController;
     }
 
     public FileReplicationDeviceController getFileReplicationFileDeviceController() {
@@ -310,7 +306,7 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
     }
 
     public void setFileReplicationDeviceController(FileReplicationDeviceController fileReplicationDeviceController) {
-        this._fileReplicationDeviceController = fileReplicationDeviceController;
+        FileOrchestrationDeviceController._fileReplicationDeviceController = fileReplicationDeviceController;
     }
 
     @Override
@@ -333,7 +329,8 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
             // Step2:Replicate CIFS share to Target Cluster
             SMBShareMap smbShareMap = sourceFileShare.getSMBFileShares();
             if (smbShareMap != null && cifsPort != null) {
-                replicateCIFSsharesToTarget(workflow, systemTarget.getId(), targetFileShare, smbShareMap, cifsPort, waitForFailover);
+                replicateCIFSsharesToTarget(workflow, systemTarget.getId(), sourceFileShare, targetFileShare, smbShareMap, cifsPort,
+                        waitForFailover);
             }
             // Step3: Replicate NFS export to Target Cluster
             FSExportMap nfsExportMap = sourceFileShare.getFsExports();
@@ -353,7 +350,7 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
     }
 
     String failoverFileSystem(Workflow workflow, URI systemTarget, FileShare sourceFileShare, FileShare targetFileShare) {
-        s_logger.info("Step 1 : failover FileSystem to target Cluster");
+        s_logger.info("Step 1:- Failover FileSystem to target Cluster");
 
         String failoverStep = workflow.createStepId();
         MirrorFileFailoverTaskCompleter completer = new MirrorFileFailoverTaskCompleter(sourceFileShare.getId(), targetFileShare.getId(),
@@ -365,19 +362,23 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
         return waitForFailover;
     }
 
-    String replicateCIFSsharesToTarget(Workflow workflow, URI systemTarget, FileShare targetFileShare,
+    String replicateCIFSsharesToTarget(Workflow workflow, URI systemTarget, FileShare sourceFileShare, FileShare targetFileShare,
             SMBShareMap smbShareMap, StoragePort cifsPort, String waitForFailover) {
         String waitForShares = null;
-        s_logger.info("Step 2 :Replicate source CIFS shares to target Cluster");
-        String shareCreationStep = workflow.createStepId();
+        s_logger.info("Step 2 : Replicate source CIFS shares to target Cluster");
 
         List<SMBFileShare> smbShares = new ArrayList<SMBFileShare>(smbShareMap.values());
 
         for (SMBFileShare smbShare : smbShares) {
+            String shareCreationStep = workflow.createStepId();
             FileSMBShare fileSMBShare = new FileSMBShare(smbShare);
             fileSMBShare.setStoragePortName(cifsPort.getPortName());
             fileSMBShare.setStoragePortNetworkId(cifsPort.getPortNetworkId());
-            fileSMBShare.setPath(targetFileShare.getPath());
+            if (fileSMBShare.isSubDirPath()) {
+                fileSMBShare.setPath(targetFileShare.getPath() + fileSMBShare.getPath().split(sourceFileShare.getPath())[1]);
+            } else {
+                fileSMBShare.setPath(targetFileShare.getPath());
+            }
             String stepDescription = "Replicating Source File System SMB Share:" + fileSMBShare.getName() + " To Target Cluster";
             waitForShares = _fileDeviceController.addStepsForCreatingCIFSShares(workflow, systemTarget, targetFileShare.getId(),
                     fileSMBShare, waitForFailover, shareCreationStep, stepDescription);
@@ -388,12 +389,12 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
     String replicateNFSExportsToTarget(Workflow workflow, URI systemTarget, FileShare targetFileShare,
             FSExportMap nfsExportMap, StoragePort nfsPort, String waitForFailover) {
         String waitForExport = null;
-        s_logger.info("Step 3 :Replicate source NFS exports to target Cluster");
-        String exportCreationStep = workflow.createStepId();
+        s_logger.info("Step 3 : Replicate source NFS exports to target Cluster");
 
         List<FileExport> nfsExports = new ArrayList<FileExport>(nfsExportMap.values());
 
         for (FileExport nfsExport : nfsExports) {
+            String exportCreationStep = workflow.createStepId();
             FileShareExport fileNFSExport = new FileShareExport(nfsExport.getClients(), nfsExport.getSecurityType(),
                     nfsExport.getPermissions(), nfsExport.getRootUserMapping(),
                     nfsExport.getProtocol(), nfsPort.getPortName(), nfsPort.getPortNetworkId(), targetFileShare.getPath(),

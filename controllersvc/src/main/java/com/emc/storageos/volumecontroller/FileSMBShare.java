@@ -85,12 +85,6 @@ public class FileSMBShare implements Serializable {
     }
 
     /**
-     * Constructor of FileSMBShare
-     */
-    public FileSMBShare() {
-    }
-
-    /**
      * Construction of FileSMBShare
      * 
      * @param smb SMBFileShare

@@ -386,8 +386,7 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
 
                         if (fsCheck) {
                             String errMsg = new String(
-                                    "delete file system from DB failed due to either snapshots or quota directories exist for file system "
-                                            + fsObj.getLabel());
+                                    "delete file system from DB failed due to either snapshots or quota directories exist for file system " + fsObj.getLabel());
                             _log.error(errMsg);
 
                             final ServiceCoded serviceCoded = DeviceControllerException.errors.jobFailedOpMsg(
