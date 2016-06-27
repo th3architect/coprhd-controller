@@ -104,6 +104,7 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
     private static final Logger _log = LoggerFactory.getLogger(FileDeviceController.class);
     private static final String CREATE_FILESYSTEM_EXPORT_METHOD = "export";
     private static final String CREATE_FILESYSTEM_SHARE_METHOD = "share";
+    private static final String UPDATE_FILESYSTEM_SHARE_ACLS_METHOD = "updateShareACLs";
     private Map<String, FileStorageDevice> _devices;
 
     private WorkflowService _workflowService;
@@ -386,7 +387,8 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
 
                         if (fsCheck) {
                             String errMsg = new String(
-                                    "delete file system from DB failed due to either snapshots or quota directories exist for file system " + fsObj.getLabel());
+                                    "delete file system from DB failed due to either snapshots or quota directories exist for file system "
+                                            + fsObj.getLabel());
                             _log.error(errMsg);
 
                             final ServiceCoded serviceCoded = DeviceControllerException.errors.jobFailedOpMsg(
@@ -2564,10 +2566,12 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
             args.setExistingShareAcls(queryExistingShareAcls(args));
 
             // Do the Operation on device.
+            WorkflowStepCompleter.stepExecuting(opId);
             BiosCommandResult result = getDevice(storageObj.getSystemType())
                     .updateShareACLs(storageObj, args);
 
             if (result.isCommandSuccess()) {
+                WorkflowStepCompleter.stepSucceded(opId);
                 // Update database
                 updateShareACLsInDB(param, fs, args);
             }
@@ -2603,6 +2607,8 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
             }
             _dbClient.persistObject(fsObj);
         } catch (Exception e) {
+            ServiceError serviceError = DeviceControllerException.errors.jobFailed(e);
+            WorkflowStepCompleter.stepFailed(opId, serviceError);
             String[] logParams = { storage.toString(), fsURI.toString() };
             _log.error("Unable to update share ACL for file system or snapshot: storage {}, FS/snapshot URI {}",
                     logParams, e);
@@ -3927,6 +3933,19 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
         return waitForShare;
     }
 
+    public String addStepsForUpdatingCIFSShareACLs(Workflow workflow, URI storageSystem, URI fileSystem, String shareName,
+            CifsShareACLUpdateParams param, String waitfor, String sharACLStep, String stepDescription) {
+
+        StorageSystem system = _dbClient.queryObject(StorageSystem.class, storageSystem);
+        Object[] args = new Object[] { storageSystem, fileSystem, shareName, param };
+        Workflow.Method updateShareACLsMethod = new Workflow.Method(UPDATE_FILESYSTEM_SHARE_ACLS_METHOD, args);
+
+        String waitForShareACL = workflow.createStep(null, stepDescription, waitfor, storageSystem, system.getSystemType(), getClass(),
+                updateShareACLsMethod, null, sharACLStep);
+
+        return waitForShareACL;
+    }
+
     public String addStepsForCreatingNFSExport(Workflow workflow, URI storage, URI fsURI, List<FileShareExport> exports, String waitFor,
             String exportStep, String stepDescription) {
 
@@ -3939,4 +3958,5 @@ public class FileDeviceController implements FileOrchestrationInterface, FileCon
 
         return waitForExport;
     }
+
 }

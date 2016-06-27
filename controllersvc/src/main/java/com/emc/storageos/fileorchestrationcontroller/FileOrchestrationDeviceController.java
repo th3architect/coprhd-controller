@@ -8,6 +8,7 @@ import java.io.Serializable;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -15,6 +16,8 @@ import org.slf4j.LoggerFactory;
 
 import com.emc.storageos.Controller;
 import com.emc.storageos.db.client.DbClient;
+import com.emc.storageos.db.client.constraint.ContainmentConstraint;
+import com.emc.storageos.db.client.model.CifsShareACL;
 import com.emc.storageos.db.client.model.FSExportMap;
 import com.emc.storageos.db.client.model.FileExport;
 import com.emc.storageos.db.client.model.FileShare;
@@ -22,9 +25,13 @@ import com.emc.storageos.db.client.model.SMBFileShare;
 import com.emc.storageos.db.client.model.SMBShareMap;
 import com.emc.storageos.db.client.model.StoragePort;
 import com.emc.storageos.db.client.model.StorageSystem;
+import com.emc.storageos.db.client.util.CustomQueryUtility;
 import com.emc.storageos.exceptions.DeviceControllerException;
 import com.emc.storageos.filereplicationcontroller.FileReplicationDeviceController;
 import com.emc.storageos.model.ResourceOperationTypeEnum;
+import com.emc.storageos.model.file.CifsShareACLUpdateParams;
+import com.emc.storageos.model.file.ShareACL;
+import com.emc.storageos.model.file.ShareACLs;
 import com.emc.storageos.svcs.errorhandling.model.ServiceError;
 import com.emc.storageos.volumecontroller.ControllerException;
 import com.emc.storageos.volumecontroller.ControllerLockingService;
@@ -364,8 +371,9 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
 
     String replicateCIFSsharesToTarget(Workflow workflow, URI systemTarget, FileShare sourceFileShare, FileShare targetFileShare,
             SMBShareMap smbShareMap, StoragePort cifsPort, String waitForFailover) {
-        String waitForShares = null;
-        s_logger.info("Step 2 : Replicate source CIFS shares to target Cluster");
+        String waitForShare = null;
+        String stepDescription = null;
+        s_logger.info("Step 2 : Replicate source CIFS shares and ACLs to target Cluster");
 
         List<SMBFileShare> smbShares = new ArrayList<SMBFileShare>(smbShareMap.values());
 
@@ -379,11 +387,22 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
             } else {
                 fileSMBShare.setPath(targetFileShare.getPath());
             }
-            String stepDescription = "Replicating Source File System SMB Share:" + fileSMBShare.getName() + " To Target Cluster";
-            waitForShares = _fileDeviceController.addStepsForCreatingCIFSShares(workflow, systemTarget, targetFileShare.getId(),
+            stepDescription = "Replicating Source File System Share:" + fileSMBShare.getName() + " To Target Cluster";
+            waitForShare = _fileDeviceController.addStepsForCreatingCIFSShares(workflow, systemTarget, targetFileShare.getId(),
                     fileSMBShare, waitForFailover, shareCreationStep, stepDescription);
+
+            List<ShareACL> shareACLsList = queryShareACLs(fileSMBShare.getName(), sourceFileShare.getId());
+            CifsShareACLUpdateParams params = new CifsShareACLUpdateParams();
+            ShareACLs shareACLs = new ShareACLs();
+            shareACLs.setShareACLs(shareACLsList);
+            params.setAclsToAdd(shareACLs);
+            String shareACLsUpdateStep = workflow.createStepId();
+            stepDescription = "Replicating Source File System Share: " + fileSMBShare.getName() + " ACLs To Target Cluster";
+            _fileDeviceController.addStepsForUpdatingCIFSShareACLs(workflow, systemTarget, targetFileShare.getId(), fileSMBShare.getName(),
+                    params, waitForShare, shareACLsUpdateStep, stepDescription);
         }
-        return waitForShares;
+        return waitForShare;
+
     }
 
     String replicateNFSExportsToTarget(Workflow workflow, URI systemTarget, FileShare targetFileShare,
@@ -405,5 +424,33 @@ public class FileOrchestrationDeviceController implements FileOrchestrationContr
                     Arrays.asList(fileNFSExport), waitForFailover, exportCreationStep, stepDescription);
         }
         return waitForExport;
+    }
+
+    public List<ShareACL> queryShareACLs(String shareName, URI fs) {
+
+        List<ShareACL> aclList = new ArrayList<ShareACL>();
+        ContainmentConstraint containmentConstraint = ContainmentConstraint.Factory
+                .getFileCifsShareAclsConstraint(fs);
+        List<CifsShareACL> shareAclList = CustomQueryUtility.queryActiveResourcesByConstraint(s_dbClient, CifsShareACL.class,
+                containmentConstraint);
+
+        if (shareAclList != null) {
+            Iterator<CifsShareACL> shareAclIter = shareAclList.iterator();
+            while (shareAclIter.hasNext()) {
+
+                CifsShareACL dbShareAcl = shareAclIter.next();
+                if (shareName.equals(dbShareAcl.getShareName())) {
+                    ShareACL acl = new ShareACL();
+                    acl.setShareName(shareName);
+                    acl.setDomain(dbShareAcl.getDomain());
+                    acl.setUser(dbShareAcl.getUser());
+                    acl.setGroup(dbShareAcl.getGroup());
+                    acl.setPermission(dbShareAcl.getPermission());
+                    acl.setFileSystemId(fs);
+                    aclList.add(acl);
+                }
+            }
+        }
+        return aclList;
     }
 }
