@@ -255,6 +255,11 @@
         field.options.addAll(executionWindows)
         field.helpTextKey = "service.defaultExecutionWindowId.helpText"
       }%
+      
+      #{field 'service.approvalRequired'}
+      #{Form.booleanCheckBoxControlGroup field:field /}
+      #{/field}
+      
       #{Form.selectOneControlGroup field:field /}
     #{/field}
   </fieldset>

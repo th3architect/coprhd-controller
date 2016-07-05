@@ -14,7 +14,8 @@ public class CatalogService extends ModelObjectWithACLs implements Cloneable, So
 
     public static final boolean DEFAULT_APPROVAL_REQUIRED = false;
     public static final boolean DEFAULT_EXECUTION_WINDOW_REQUIRED = false;
-
+    public static final boolean DEFAULT_SCHEDULER_AVAILABLE = true;
+    
     public static final String TITLE = "title";
     public static final String IMAGE = "image";
     public static final String DESCRIPTION = "description";
@@ -25,7 +26,8 @@ public class CatalogService extends ModelObjectWithACLs implements Cloneable, So
     public static final String MAX_SIZE = "maxSize";
     public static final String CATALOG_CATEGORY_ID = "catalogCategoryId";
     public static final String SORTED_INDEX = "sortedIndex";
-
+    public static final String SCHEDULER_AVAILABLE = "schedulerAvailable";
+    
     private String title;
 
     private String image;
@@ -46,6 +48,8 @@ public class CatalogService extends ModelObjectWithACLs implements Cloneable, So
 
     private Integer sortedIndex;
 
+    private Boolean schedulerAvailable = DEFAULT_SCHEDULER_AVAILABLE;
+    
     @Name(TITLE)
     public String getTitle() {
         return title;
@@ -150,6 +154,15 @@ public class CatalogService extends ModelObjectWithACLs implements Cloneable, So
         this.sortedIndex = sortedIndex;
         setChanged(SORTED_INDEX);
     }
+    
+    @Name(EXECUTION_WINDOW_REQUIRED)
+    public Boolean getSchedulerAvailable() {
+        return schedulerAvailable;
+    }
+
+    public void setSchedulerAvailable(Boolean schedulerAvailable) {
+        this.schedulerAvailable = schedulerAvailable;
+    }
 
     @Override
     public String toString() {
@@ -176,4 +189,5 @@ public class CatalogService extends ModelObjectWithACLs implements Cloneable, So
         return new Object[] { getLabel(), getCatalogCategoryId(), getId() };
     }
 
+    
 }

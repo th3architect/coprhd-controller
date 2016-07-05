@@ -29,6 +29,7 @@ public class CatalogServiceRestRep extends SortedIndexRestRep {
     private RelatedResourceRep catalogCategory;
     private List<CatalogServiceFieldRestRep> catalogServiceFields;
     private ServiceDescriptorRestRep serviceDescriptor;
+    private boolean schedulerAvailable = false;            // Indicates if scheduler options available or not
 
     @XmlElement(name = "title")
     public String getTitle() {
@@ -131,4 +132,15 @@ public class CatalogServiceRestRep extends SortedIndexRestRep {
     public void setServiceDescriptor(ServiceDescriptorRestRep descriptor) {
         this.serviceDescriptor = descriptor;
     }
+
+    @XmlElement(name = "scheduler_available")
+    public boolean isSchedulerAvailable() {
+        return schedulerAvailable;
+    }
+
+    public void setSchedulerAvailable(boolean schedulerAvailable) {
+        this.schedulerAvailable = schedulerAvailable;
+    }
+    
+    
 }

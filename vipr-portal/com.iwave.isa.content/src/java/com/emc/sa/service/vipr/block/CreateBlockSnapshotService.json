@@ -73,23 +73,22 @@
       items:{
           schedulerEnabled: {
             type: "assetType.vipr.schedulerEnabled",
-            initialValue: "false",
+            initialValue: "none",
             required: "false",
-            lockable: true
           },
           
           schedulerRangeRecurrence: {
             type: "number",
           	required: "false",
-          	lockable: true,
           	initialValue: "0"
           },
+          
           schedulerStartTime: {
           	type: "assetType.vipr.schedulerStartTime",
           	required: "false",
           	initialValue: "01:00",
-          	lockable: true
           },
+          
           schedulerRecurrence: {
             type: "number",
             required: "false",
