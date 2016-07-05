@@ -12,6 +12,7 @@ import static com.emc.sa.service.ServiceParams.READ_ONLY;
 import static com.emc.sa.service.ServiceParams.STORAGE_TYPE;
 import static com.emc.sa.service.ServiceParams.TYPE;
 import static com.emc.sa.service.ServiceParams.VOLUMES;
+import static com.emc.sa.service.ServiceParams.ENABLE_SCHEDULER;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,6 +55,9 @@ public class CreateBlockSnapshotService extends ViPRService {
     @Param(value = LINKED_SNAPSHOT_COPYMODE, required = false)
     protected String linkedSnapshotCopyMode;
 
+    @Param(value = ENABLE_SCHEDULER, required = false)
+    protected Boolean schedulerEnabled;
+    
     private List<BlockObjectRestRep> volumes;
 
     @Override

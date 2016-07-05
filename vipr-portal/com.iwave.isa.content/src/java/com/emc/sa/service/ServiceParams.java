@@ -156,4 +156,5 @@ public interface ServiceParams {
     public String LINKED_SNAPSHOT_COUNT = "linkedSnapshotCount";
     public String LINKED_SNAPSHOT_COPYMODE = "linkedSnapshotCopyMode";
 
+    public String ENABLE_SCHEDULER = "Enable Scheduler";
 }

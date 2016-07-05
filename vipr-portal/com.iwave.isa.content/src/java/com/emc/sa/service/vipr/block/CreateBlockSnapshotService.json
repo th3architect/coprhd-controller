@@ -64,6 +64,48 @@
           required: "false"
         }
       }
+    },
+    
+    scheduler:{
+      type:"group",
+      lockable: true,
+      collapsed: true,
+      items:{
+          schedulerEnabled: {
+            type: "assetType.vipr.schedulerEnabled",
+            initialValue: "false",
+            required: "false",
+            lockable: true
+          },
+          
+          schedulerRangeRecurrence: {
+            type: "number",
+          	required: "false",
+          	lockable: true,
+          	initialValue: "0"
+          },
+          schedulerStartTime: {
+          	type: "assetType.vipr.schedulerStartTime",
+          	required: "false",
+          	initialValue: "01:00",
+          	lockable: true
+          },
+          schedulerRecurrence: {
+            type: "number",
+            required: "false",
+            initialValue: "1"
+          },
+          schedulerRecurrenceUnit: {
+            type: "assetType.vipr.schedulerRecurrenceUnit",
+            required: "false" ,
+            initialValue: "2"
+          },
+          schedulerRecurrenceDay: {
+            type: "assetType.vipr.schedulerRecurrenceDay",
+            required: "false",
+            initialValue: "1"
+          }
+      }	
     }
   }
 }
